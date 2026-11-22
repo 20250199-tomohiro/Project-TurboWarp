@@ -2,6 +2,7 @@
 set -euo pipefail
 : "${TRAMPOLINE_HOST:?TRAMPOLINE_HOST を設定してください}"
 
+rm -rf scratch-gui
 git clone --depth 1 https://github.com/TurboWarp/scratch-gui
 cd scratch-gui
 npm ci
