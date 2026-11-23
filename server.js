@@ -71,15 +71,17 @@ const loginPage = (message = '') => `<!doctype html>
 <meta name="robots" content="noindex">
 <title>パスワードを入力</title>
 <style>
-  :root { color-scheme: light dark; }
+  :root { --accent: #FF4C4C; color-scheme: light dark; }
   body { margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
          font-family: system-ui, sans-serif; background: #f3f4f6; color: #111; }
   @media (prefers-color-scheme: dark) { body { background: #111827; color: #f3f4f6; } }
   form { width: min(320px, 90vw); padding: 24px; border-radius: 12px; background: rgba(127,127,127,.15); }
   h1 { font-size: 18px; margin: 0 0 16px; }
   input, button { width: 100%; box-sizing: border-box; padding: 10px; font-size: 16px; border-radius: 8px; border: 1px solid #888; }
-  button { margin-top: 12px; border: 0; background: #4c97ff; color: #fff; cursor: pointer; }
-  #msg { min-height: 1.5em; margin: 12px 0 0; color: #d33; font-size: 14px; }
+  input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  button { margin-top: 12px; border: 0; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
+  button:hover { filter: brightness(0.92); }
+  #msg { min-height: 1.5em; margin: 12px 0 0; color: #b00020; font-size: 14px; }
 </style>
 </head>
 <body>
