@@ -87,11 +87,11 @@ const loginPage = (message = '') => `<!doctype html>
 </style>
 </head>
 <body>
-<img class="logo" src="/Turbowarp_logo.png" alt="TURBOWARP">
+<img class="Turbowarp_logo" src="/Turbowarp_logo.png" alt="TURBOWARP">
 <form id="f" method="post" action="/login">
   <h1>パスワードを入力してください</h1>
   <input type="password" name="password" autofocus required autocomplete="current-password" aria-label="パスワード">
-  <button type="submit">入る</button>
+  <button type="submit">ログイン</button>
   <p id="msg">${message}</p>
 </form>
 <script>
