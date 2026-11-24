@@ -167,6 +167,81 @@ app.use((req, res, next) => {
   res.status(401).type('html').send(loginPage());
 });
 
+// ---- 検索機能 ----
+const SEARCH_LANGUAGE = process.env.SEARCH_LANGUAGE || 'ja';
+const SEARCH_MODES = new Set(['popular', 'trending', 'recent']);
+const SEARCH_LIMIT = 20;
+const SEARCH_CACHE_MS = 60 * 1000;
+const searchCache = new Map();
+const SCRATCH_UA = 'turbowarp-mirror-search';
+
+app.get('/search', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'search.html'));
+});
+
+app.get('/search-api', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const q = typeof req.query.q === 'string' ? req.query.q.trim() : '';
+  const mode = SEARCH_MODES.has(req.query.mode) ? req.query.mode : 'popular';
+  const parsedOffset = Number.parseInt(req.query.offset, 10);
+  const offset = Number.isInteger(parsedOffset) && parsedOffset >= 0 && parsedOffset <= 2000 ? parsedOffset : 0;
+
+  if (!q) return res.json([]);
+  if (q.length > 100) return res.status(400).json({ error: 'query too long' });
+
+  const key = mode + '|' + offset + '|' + q;
+  const cached = searchCache.get(key);
+  if (cached && cached.expires > Date.now()) return res.json(cached.items);
+
+  try {
+    const params = new URLSearchParams({
+      q,
+      mode,
+      language: SEARCH_LANGUAGE,
+      limit: String(SEARCH_LIMIT),
+      offset: String(offset)
+    });
+    const upstream = await fetch('https://api.scratch.mit.edu/search/projects?' + params.toString(), {
+      headers: { 'User-Agent': SCRATCH_UA },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!upstream.ok) return res.status(502).json({ error: 'upstream status ' + upstream.status });
+    const json = await upstream.json();
+    const items = (Array.isArray(json) ? json : []).map((p) => ({
+      id: p.id,
+      title: String(p.title == null ? '' : p.title),
+      author: String(p.author && p.author.username ? p.author.username : ''),
+      views: p.stats && p.stats.views ? p.stats.views : 0,
+      loves: p.stats && p.stats.loves ? p.stats.loves : 0,
+      favorites: p.stats && p.stats.favorites ? p.stats.favorites : 0
+    }));
+    if (searchCache.size > 200) searchCache.clear();
+    searchCache.set(key, { expires: Date.now() + SEARCH_CACHE_MS, items });
+    return res.json(items);
+  } catch (err) {
+    return res.status(502).json({ error: 'search failed' });
+  }
+});
+
+app.get('/search-thumb/:id', async (req, res) => {
+  const id = req.params.id;
+  if (!/^\d{1,12}$/.test(id)) return res.status(400).end();
+  try {
+    const upstream = await fetch('https://uploads.scratch.mit.edu/projects/thumbnails/' + id + '.png', {
+      headers: { 'User-Agent': SCRATCH_UA },
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!upstream.ok) return res.status(404).end();
+    const buf = Buffer.from(await upstream.arrayBuffer());
+    res.set('Content-Type', 'image/png');
+    res.set('Cache-Control', 'private, max-age=3600');
+    return res.send(buf);
+  } catch (err) {
+    return res.status(502).end();
+  }
+});
+
 app.use(express.static(path.join(__dirname, 'scratch-gui/build')));
 
 const port = process.env.PORT || 10000;
