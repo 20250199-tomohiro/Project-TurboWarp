@@ -20,4 +20,15 @@ sed -i "s#extensions\.turbowarp\.org#${EXTENSIONS_HOST}#g" \
 
 NODE_ENV=production npm run build
 cd ..
+
+# patch.py が index.html を消す前に、閲覧ページを player.html として残す
+cp scratch-gui/build/index.html scratch-gui/build/player.html
+
 python3 patch.py
+
+# 「探す」ボタンのスクリプトを、トップ(index.html)と閲覧ページ(player.html)に差し込む
+cp search-button.js scratch-gui/build/search-button.js
+sed -i 's#</body>#<script src="/search-button.js"></script></body>#' \
+  scratch-gui/build/index.html scratch-gui/build/player.html
+grep -q "search-button.js" scratch-gui/build/index.html || { echo "index.html への差し込みに失敗しました"; exit 1; }
+grep -q "search-button.js" scratch-gui/build/player.html || { echo "player.html への差し込みに失敗しました"; exit 1; }
