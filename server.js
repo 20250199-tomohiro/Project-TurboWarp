@@ -503,6 +503,13 @@ app.use((req, res, next) => {
   return res.status(401).type('html').send(loginPage());
 });
 
+// ---- ログイン中のアカウント名(ナビゲーションバーの表示用) ----
+app.get('/me', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const acc = getLoggedInUser(req);
+  res.json({ username: acc ? acc.username : '' });
+});
+
 // ---- 検索機能 ----
 const SEARCH_MODES = new Set(['popular', 'trending', 'recent']);
 const SEARCH_LIMIT = 20;
