@@ -1,0 +1,378 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex, nofollow">
+<title>管理画面</title>
+<style>
+  :root {
+    --accent: #FF4C4C; --bg: #f3f4f6; --fg: #111; --card: #fff; --muted: #666; --line: #d1d5db;
+    --ok: #15803d; --warn: #b45309; --bad: #b00020;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111827; --fg: #f3f4f6; --card: #1f2937; --muted: #9ca3af; --line: #374151;
+            --ok: #4ade80; --warn: #fbbf24; --bad: #f87171; }
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; }
+  [hidden] { display: none !important; }
+  header { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px;
+           background: var(--card); border-bottom: 1px solid var(--line); }
+  header h1 { margin: 0; font-size: 18px; }
+  main { width: min(1100px, 100%); margin: 0 auto; padding: 16px; display: flex; flex-direction: column; gap: 24px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 16px; }
+  h2 { margin: 0 0 12px; font-size: 16px; }
+  input, select, button { font-size: 15px; padding: 8px 10px; border-radius: 8px; border: 1px solid var(--line);
+                          background: var(--card); color: var(--fg); }
+  input:focus, select:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
+  button { cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  button.primary { border: 0; background: var(--accent); color: #fff; font-weight: 700; }
+  button.primary:hover { filter: brightness(0.92); }
+  button.danger { color: var(--bad); border-color: var(--bad); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+  .row > input { flex: 1 1 160px; min-width: 0; }
+  .login-box { width: min(360px, 92vw); margin: 12vh auto 0; }
+  .login-box form { display: flex; flex-direction: column; gap: 10px; }
+  .msg { min-height: 1.4em; margin: 8px 0 0; font-size: 14px; color: var(--bad); }
+  .msg.ok { color: var(--ok); }
+  .table-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 14px; }
+  th, td { text-align: left; padding: 8px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 600; white-space: nowrap; }
+  td.actions { white-space: nowrap; }
+  td.actions button { margin: 2px 4px 2px 0; padding: 5px 9px; font-size: 13px; }
+  .badge { display: inline-block; padding: 2px 8px; border-radius: 999px; font-size: 12px; font-weight: 700;
+           border: 1px solid currentColor; }
+  .badge.on { color: var(--ok); }
+  .badge.off { color: var(--warn); }
+  .ev-ok { color: var(--ok); }
+  .ev-bad { color: var(--bad); }
+  .ev-warn { color: var(--warn); }
+  .muted { color: var(--muted); }
+  .ua { max-width: 260px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+  .filters { margin-bottom: 12px; }
+</style>
+</head>
+<body>
+
+<div id="loginView" class="login-box" hidden>
+  <section>
+    <h2>管理者ログイン</h2>
+    <form id="loginForm">
+      <input id="adminUser" type="text" placeholder="管理者ユーザー名" required maxlength="128" autocomplete="username" autocapitalize="off" spellcheck="false">
+      <input id="adminPass" type="password" placeholder="管理者パスワード" required maxlength="256" autocomplete="current-password">
+      <button class="primary" type="submit" id="loginBtn">ログイン</button>
+      <p class="msg" id="loginMsg"></p>
+    </form>
+  </section>
+</div>
+
+<div id="appView" hidden>
+  <header>
+    <h1>管理画面</h1>
+    <button type="button" id="logoutBtn">ログアウト</button>
+  </header>
+  <main>
+    <section>
+      <h2>アカウントを作成</h2>
+      <form id="createForm" class="row">
+        <input id="newUser" type="text" placeholder="アカウント名(半角英数字と _ . - の3〜32文字)" required maxlength="32" autocomplete="off" autocapitalize="off" spellcheck="false">
+        <input id="newPass" type="text" placeholder="パスワード(8文字以上)" required minlength="8" maxlength="128" autocomplete="off" spellcheck="false">
+        <button class="primary" type="submit" id="createBtn">作成</button>
+      </form>
+      <p class="msg" id="createMsg"></p>
+    </section>
+
+    <section>
+      <h2>アカウント一覧</h2>
+      <p class="msg" id="accountsMsg"></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>アカウント名</th><th>状態</th><th>作成日時</th><th>最終ログイン</th><th>操作</th></tr>
+          </thead>
+          <tbody id="accountsBody"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <section>
+      <h2>利用履歴</h2>
+      <form id="filterForm" class="row filters">
+        <input id="filterUser" type="text" placeholder="アカウント名で絞り込み" maxlength="64" autocapitalize="off" spellcheck="false">
+        <select id="filterEvent" aria-label="種類">
+          <option value="">すべての種類</option>
+          <option value="login_success">ログイン</option>
+          <option value="logout">ログアウト</option>
+          <option value="login_failed">ログイン失敗</option>
+          <option value="login_blocked">無効なアカウントのログイン</option>
+          <option value="account_created">アカウント作成</option>
+          <option value="account_enabled">有効化</option>
+          <option value="account_disabled">無効化</option>
+          <option value="password_reset">パスワード再設定</option>
+          <option value="account_deleted">アカウント削除</option>
+          <option value="admin_login">管理者ログイン</option>
+          <option value="admin_login_failed">管理者ログイン失敗</option>
+          <option value="admin_logout">管理者ログアウト</option>
+        </select>
+        <button type="submit">絞り込む</button>
+        <button type="button" id="reloadLogs">再読み込み</button>
+      </form>
+      <p class="msg" id="logsMsg"></p>
+      <div class="table-wrap">
+        <table>
+          <thead>
+            <tr><th>日時</th><th>アカウント名</th><th>種類</th><th>詳細</th><th>IPアドレス</th><th>ブラウザ</th></tr>
+          </thead>
+          <tbody id="logsBody"></tbody>
+        </table>
+      </div>
+      <p><button type="button" id="moreLogs" hidden>さらに表示</button></p>
+    </section>
+  </main>
+</div>
+
+<script>
+(() => {
+  const BASE = location.pathname.replace(/\/+$/, '') + '/';
+  const $ = (id) => document.getElementById(id);
+  const LOG_PAGE = 100;
+
+  const EVENTS = {
+    login_success: ['ログイン', 'ev-ok'],
+    logout: ['ログアウト', ''],
+    login_failed: ['ログイン失敗', 'ev-bad'],
+    login_blocked: ['無効なアカウントのログイン', 'ev-bad'],
+    account_created: ['アカウント作成', 'ev-warn'],
+    account_enabled: ['有効化', 'ev-warn'],
+    account_disabled: ['無効化', 'ev-warn'],
+    password_reset: ['パスワード再設定', 'ev-warn'],
+    account_deleted: ['アカウント削除', 'ev-bad'],
+    admin_login: ['管理者ログイン', 'ev-warn'],
+    admin_login_failed: ['管理者ログイン失敗', 'ev-bad'],
+    admin_logout: ['管理者ログアウト', 'ev-warn']
+  };
+
+  const fmtDate = (s) => {
+    if (!s) return '—';
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? '—' : d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false });
+  };
+
+  const setMsg = (el, text, ok = false) => {
+    el.textContent = text || '';
+    el.classList.toggle('ok', !!ok);
+  };
+
+  const api = async (path, options = {}) => {
+    const headers = { 'X-Admin': '1' };
+    if (options.body !== undefined) headers['Content-Type'] = 'application/json';
+    const res = await fetch(BASE + 'api/' + path, {
+      method: options.method || 'GET',
+      headers,
+      credentials: 'same-origin',
+      body: options.body !== undefined ? JSON.stringify(options.body) : undefined
+    });
+    const data = await res.json().catch(() => ({}));
+    if (res.status === 401 && path !== 'login') {
+      showLogin();
+      throw new Error(data.message || 'ログインしてください');
+    }
+    if (!res.ok) throw new Error(data.message || ('エラーが発生しました(' + res.status + ')'));
+    return data;
+  };
+
+  const showLogin = () => {
+    $('appView').hidden = true;
+    $('loginView').hidden = false;
+  };
+  const showApp = () => {
+    $('loginView').hidden = true;
+    $('appView').hidden = false;
+  };
+
+  // ---------- アカウント ----------
+  const cell = (text, className) => {
+    const td = document.createElement('td');
+    td.textContent = text;
+    if (className) td.className = className;
+    return td;
+  };
+
+  const actionButton = (label, onClick, className) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    if (className) b.className = className;
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try { await onClick(); } finally { b.disabled = false; }
+    });
+    return b;
+  };
+
+  const loadAccounts = async () => {
+    setMsg($('accountsMsg'), '');
+    try {
+      const rows = await api('accounts');
+      const body = $('accountsBody');
+      body.replaceChildren();
+      if (!rows.length) {
+        const tr = document.createElement('tr');
+        const td = cell('まだアカウントがありません。上のフォームから作成してください。', 'muted');
+        td.colSpan = 5;
+        tr.append(td);
+        body.append(tr);
+        return;
+      }
+      for (const a of rows) {
+        const tr = document.createElement('tr');
+        tr.append(cell(a.username));
+
+        const state = document.createElement('td');
+        const badge = document.createElement('span');
+        badge.className = 'badge ' + (a.enabled ? 'on' : 'off');
+        badge.textContent = a.enabled ? '有効' : '無効';
+        state.append(badge);
+        tr.append(state);
+
+        tr.append(cell(fmtDate(a.created_at)), cell(fmtDate(a.last_login)));
+
+        const actions = document.createElement('td');
+        actions.className = 'actions';
+        actions.append(
+          actionButton(a.enabled ? '無効にする' : '有効にする', async () => {
+            if (a.enabled && !confirm('「' + a.username + '」を無効にします。ログイン中の場合は、すぐにログアウトされます。')) return;
+            try {
+              await api('accounts/' + a.id + '/enabled', { method: 'POST', body: { enabled: !a.enabled } });
+              await Promise.all([loadAccounts(), loadLogs(true)]);
+            } catch (err) { setMsg($('accountsMsg'), err.message); }
+          }),
+          actionButton('パスワード再設定', async () => {
+            const pw = prompt('「' + a.username + '」の新しいパスワード(8文字以上)を入力してください。ログイン中の場合は、ログアウトされます。');
+            if (pw === null) return;
+            try {
+              await api('accounts/' + a.id + '/password', { method: 'POST', body: { password: pw } });
+              setMsg($('accountsMsg'), '「' + a.username + '」のパスワードを再設定しました', true);
+              await loadLogs(true);
+            } catch (err) { setMsg($('accountsMsg'), err.message); }
+          }),
+          actionButton('削除', async () => {
+            if (!confirm('「' + a.username + '」を削除します。この操作は元に戻せません。')) return;
+            try {
+              await api('accounts/' + a.id, { method: 'DELETE' });
+              await Promise.all([loadAccounts(), loadLogs(true)]);
+            } catch (err) { setMsg($('accountsMsg'), err.message); }
+          }, 'danger')
+        );
+        tr.append(actions);
+        body.append(tr);
+      }
+    } catch (err) {
+      setMsg($('accountsMsg'), err.message);
+    }
+  };
+
+  $('createForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('createBtn');
+    btn.disabled = true;
+    setMsg($('createMsg'), '');
+    try {
+      const username = $('newUser').value.trim();
+      await api('accounts', { method: 'POST', body: { username, password: $('newPass').value } });
+      setMsg($('createMsg'), '「' + username + '」を作成しました。アカウント名とパスワードを、本人に伝えてください。', true);
+      $('newUser').value = '';
+      $('newPass').value = '';
+      await Promise.all([loadAccounts(), loadLogs(true)]);
+    } catch (err) {
+      setMsg($('createMsg'), err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  // ---------- 利用履歴 ----------
+  let logOffset = 0;
+  let logFilter = { username: '', event: '' };
+  let logLoading = false;
+
+  const loadLogs = async (reset) => {
+    if (logLoading) return;
+    logLoading = true;
+    setMsg($('logsMsg'), '');
+    try {
+      if (reset) logOffset = 0;
+      const params = new URLSearchParams({ limit: String(LOG_PAGE), offset: String(logOffset) });
+      if (logFilter.username) params.set('username', logFilter.username);
+      if (logFilter.event) params.set('event', logFilter.event);
+      const rows = await api('logs?' + params.toString());
+      const body = $('logsBody');
+      if (reset) body.replaceChildren();
+      for (const r of rows) {
+        const tr = document.createElement('tr');
+        const ev = EVENTS[r.event] || [r.event, ''];
+        tr.append(cell(fmtDate(r.at)), cell(r.username), cell(ev[0], ev[1]), cell(r.detail || ''), cell(r.ip || ''), cell(r.ua || '', 'ua'));
+        tr.lastChild.title = r.ua || '';
+        body.append(tr);
+      }
+      logOffset += rows.length;
+      $('moreLogs').hidden = rows.length < LOG_PAGE;
+      if (reset && !rows.length) setMsg($('logsMsg'), '該当する履歴はありません');
+    } catch (err) {
+      setMsg($('logsMsg'), err.message);
+    } finally {
+      logLoading = false;
+    }
+  };
+
+  $('filterForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    logFilter = { username: $('filterUser').value.trim(), event: $('filterEvent').value };
+    loadLogs(true);
+  });
+  $('reloadLogs').addEventListener('click', () => loadLogs(true));
+  $('moreLogs').addEventListener('click', () => loadLogs(false));
+
+  // ---------- ログイン / ログアウト ----------
+  $('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = $('loginBtn');
+    btn.disabled = true;
+    setMsg($('loginMsg'), '');
+    try {
+      await api('login', { method: 'POST', body: { username: $('adminUser').value, password: $('adminPass').value } });
+      $('adminPass').value = '';
+      await enter();
+    } catch (err) {
+      setMsg($('loginMsg'), err.message);
+    } finally {
+      btn.disabled = false;
+    }
+  });
+
+  $('logoutBtn').addEventListener('click', async () => {
+    try { await api('logout', { method: 'POST', body: {} }); } catch (err) { /* そのままログイン画面へ */ }
+    showLogin();
+  });
+
+  const enter = async () => {
+    showApp();
+    await Promise.all([loadAccounts(), loadLogs(true)]);
+  };
+
+  (async () => {
+    try {
+      await api('accounts');
+      await enter();
+    } catch (err) {
+      showLogin();
+    }
+  })();
+})();
+</script>
+</body>
+</html>
