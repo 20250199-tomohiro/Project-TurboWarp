@@ -18,12 +18,16 @@ if (SESSION_SECRET.length < 32) {
   process.exit(1);
 }
 const ADMIN_PATH = process.env.ADMIN_PATH || 'admin';
-const RESERVED_PATHS = ['login', 'logout', 'search', 'search-api', 'search-thumb', 'player', 'static', 'js', 'extensions'];
+const RESERVED_PATHS = ['login', 'logout', 'search', 'search-api', 'search-thumb', 'player', 'static', 'js', 'extensions', 'my', 'me', 'editor', 'logo'];
 if (!/^[A-Za-z0-9_-]{1,64}$/.test(ADMIN_PATH) || RESERVED_PATHS.includes(ADMIN_PATH)) {
   console.error('ADMIN_PATH は半角英数字・_・- の1〜64文字で、他のページ名と重ならない値にしてください');
   process.exit(1);
 }
 const SEARCH_LANGUAGE = process.env.SEARCH_LANGUAGE || 'ja';
+// 「私の作品」: 1アカウントあたりの保存数と、1作品の大きさの上限
+const MAX_PROJECTS = Math.max(1, Number.parseInt(process.env.MAX_PROJECTS, 10) || 5);
+const MAX_PROJECT_MB = Math.max(1, Number.parseInt(process.env.MAX_PROJECT_MB, 10) || 15);
+const MAX_PROJECT_BYTES = MAX_PROJECT_MB * 1024 * 1024;
 
 const USER_COOKIE = 'mirror_session';
 const ADMIN_COOKIE = 'mirror_admin';
@@ -65,6 +69,16 @@ const initDb = async () => {
   )`);
   await q('CREATE INDEX IF NOT EXISTS logs_at ON logs (at DESC)');
   await q('CREATE INDEX IF NOT EXISTS logs_username ON logs (lower(username))');
+  await q(`CREATE TABLE IF NOT EXISTS projects (
+    id SERIAL PRIMARY KEY,
+    account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    title TEXT NOT NULL,
+    data BYTEA NOT NULL,
+    size INTEGER NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await q('CREATE INDEX IF NOT EXISTS projects_account ON projects (account_id)');
 };
 
 const cleanupLogs = async () => {
@@ -496,6 +510,36 @@ admin.get('/api/logs', async (req, res) => {
 
 app.use('/' + ADMIN_PATH, admin);
 
+// ---- 「私の作品」を開くための、短時間だけ有効な取得URL ----
+// エディターが project_url で作品を読み込むときに、Cookieが送られなくても取得できるようにする
+const DL_TTL_MS = 10 * 60 * 1000;
+const makeDlToken = (id) => {
+  const exp = Date.now() + DL_TTL_MS;
+  return exp + '-' + hmac('dl|' + id + '|' + exp);
+};
+const verifyDlToken = (id, token) => {
+  if (typeof token !== 'string') return false;
+  const i = token.indexOf('-');
+  if (i < 0) return false;
+  const exp = token.slice(0, i);
+  const sig = token.slice(i + 1);
+  if (!/^\d+$/.test(exp) || Number(exp) < Date.now()) return false;
+  return safeEqual(sig, hmac('dl|' + id + '|' + exp));
+};
+
+app.get('/my/dl/:id/:token/project.sb3', async (req, res) => {
+  const id = Number.parseInt(req.params.id, 10);
+  if (!Number.isInteger(id) || id <= 0 || !verifyDlToken(id, req.params.token)) return res.status(403).end();
+  const { rows } = await q(
+    'SELECT p.data FROM projects p JOIN accounts a ON a.id = p.account_id WHERE p.id = $1::int AND a.enabled = TRUE',
+    [id]
+  );
+  if (!rows[0]) return res.status(404).end();
+  res.set('Cache-Control', 'no-store');
+  res.type('application/octet-stream');
+  return res.send(rows[0].data);
+});
+
 // ---- ここから先は、ログインした利用者だけが見られる ----
 app.use((req, res, next) => {
   if (getLoggedInUser(req)) return next();
@@ -508,6 +552,126 @@ app.get('/me', (req, res) => {
   res.set('Cache-Control', 'no-store');
   const acc = getLoggedInUser(req);
   res.json({ username: acc ? acc.username : '' });
+});
+
+// ---- 私の作品(アカウントごとの保存) ----
+const requireXhr = (req, res, next) => {
+  // 他サイトのフォームなどからの変更操作を拒否する(独自のヘッダーは、他サイトからは付けられない)
+  if (req.method !== 'GET' && req.get('X-Mirror') !== '1') {
+    return res.status(403).json({ message: '許可されていない操作です' });
+  }
+  return next();
+};
+const parseProjectId = (v) => {
+  const id = Number.parseInt(v, 10);
+  return Number.isInteger(id) && id > 0 ? id : null;
+};
+const cleanTitle = (t) => (
+  typeof t === 'string' ? t.replace(/[\u0000-\u001f\u007f]/g, '').trim().slice(0, 60) : ''
+);
+const isSb3 = (buf) => (
+  Buffer.isBuffer(buf) && buf.length >= 4 && buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04
+);
+const rawBody = express.raw({ type: () => true, limit: MAX_PROJECT_BYTES });
+
+app.get('/my', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'my.html'));
+});
+
+app.get('/my/open/:id', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const acc = getLoggedInUser(req);
+  const id = parseProjectId(req.params.id);
+  if (!id) return res.redirect('/my');
+  const { rows } = await q('SELECT id FROM projects WHERE id = $1::int AND account_id = $2::int', [id, acc.id]);
+  if (!rows[0]) return res.redirect('/my');
+  const fileUrl = req.protocol + '://' + req.get('host') + '/my/dl/' + id + '/' + makeDlToken(id) + '/project.sb3';
+  return res.redirect('/editor.html?project_url=' + encodeURIComponent(fileUrl) + '&mirror_pid=' + id);
+});
+
+app.get('/my/api/projects', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const acc = getLoggedInUser(req);
+  const { rows } = await q(
+    'SELECT id, title, size, created_at, updated_at FROM projects WHERE account_id = $1::int ORDER BY updated_at DESC',
+    [acc.id]
+  );
+  res.json({ max: MAX_PROJECTS, maxBytes: MAX_PROJECT_BYTES, projects: rows });
+});
+
+app.post('/my/api/projects', requireXhr, rawBody, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const acc = getLoggedInUser(req);
+  if (!isSb3(req.body)) return res.status(400).json({ message: 'sb3ファイルではありません' });
+  const title = cleanTitle(req.query.title) || '無題の作品';
+  const { rows } = await q(
+    `INSERT INTO projects (account_id, title, data, size)
+     SELECT $1::int, $2::text, $3::bytea, $4::int
+     WHERE (SELECT count(*) FROM projects WHERE account_id = $1::int) < $5::int
+     RETURNING id, title`,
+    [acc.id, title, req.body, req.body.length, MAX_PROJECTS]
+  );
+  if (!rows[0]) {
+    return res.status(409).json({
+      message: '保存できる作品は' + MAX_PROJECTS + '個までです。「私の作品」で、いらない作品を削除してください'
+    });
+  }
+  return res.json({ ok: true, id: rows[0].id, title: rows[0].title });
+});
+
+app.put('/my/api/projects/:id', requireXhr, rawBody, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const acc = getLoggedInUser(req);
+  const id = parseProjectId(req.params.id);
+  if (!id) return res.status(400).json({ message: '指定が正しくありません' });
+  if (!isSb3(req.body)) return res.status(400).json({ message: 'sb3ファイルではありません' });
+  const title = cleanTitle(req.query.title);
+  const { rows } = await q(
+    `UPDATE projects
+     SET data = $3::bytea, size = $4::int, title = COALESCE(NULLIF($5::text, ''), title), updated_at = NOW()
+     WHERE id = $1::int AND account_id = $2::int
+     RETURNING id, title`,
+    [id, acc.id, req.body, req.body.length, title]
+  );
+  if (!rows[0]) return res.status(404).json({ message: '作品が見つかりません' });
+  return res.json({ ok: true, id: rows[0].id, title: rows[0].title });
+});
+
+app.post('/my/api/projects/:id/rename', requireXhr, express.json({ limit: '2kb' }), async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const acc = getLoggedInUser(req);
+  const id = parseProjectId(req.params.id);
+  const title = cleanTitle(req.body ? req.body.title : '');
+  if (!id || !title) return res.status(400).json({ message: '名前を入力してください' });
+  const { rows } = await q(
+    'UPDATE projects SET title = $3::text WHERE id = $1::int AND account_id = $2::int RETURNING id',
+    [id, acc.id, title]
+  );
+  if (!rows[0]) return res.status(404).json({ message: '作品が見つかりません' });
+  return res.json({ ok: true });
+});
+
+app.delete('/my/api/projects/:id', requireXhr, async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const acc = getLoggedInUser(req);
+  const id = parseProjectId(req.params.id);
+  if (!id) return res.status(400).json({ message: '指定が正しくありません' });
+  const { rows } = await q('DELETE FROM projects WHERE id = $1::int AND account_id = $2::int RETURNING id', [id, acc.id]);
+  if (!rows[0]) return res.status(404).json({ message: '作品が見つかりません' });
+  return res.json({ ok: true });
+});
+
+app.get('/my/api/projects/:id/file', async (req, res) => {
+  const acc = getLoggedInUser(req);
+  const id = parseProjectId(req.params.id);
+  if (!id) return res.status(400).end();
+  const { rows } = await q('SELECT title, data FROM projects WHERE id = $1::int AND account_id = $2::int', [id, acc.id]);
+  if (!rows[0]) return res.status(404).end();
+  res.set('Cache-Control', 'no-store');
+  res.set('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(rows[0].title) + '.sb3');
+  res.type('application/octet-stream');
+  return res.send(rows[0].data);
 });
 
 // ---- 検索機能 ----
@@ -594,7 +758,11 @@ app.use((err, req, res, next) => {
   const status = err && err.status >= 400 && err.status < 600 ? err.status : 500;
   return res.status(status).json({
     error: 'server_error',
-    message: status === 400 ? '送信内容が正しくありません' : 'サーバーでエラーが発生しました。しばらくしてからやり直してください'
+    message: status === 413
+      ? 'ファイルが大きすぎます(1つの作品は ' + MAX_PROJECT_MB + 'MB まで)'
+      : status === 400
+        ? '送信内容が正しくありません'
+        : 'サーバーでエラーが発生しました。しばらくしてからやり直してください'
   });
 });
 

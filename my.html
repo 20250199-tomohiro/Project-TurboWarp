@@ -1,0 +1,210 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>私の作品</title>
+<style>
+  :root {
+    --accent: #FF4C4C; --bg: #f3f4f6; --fg: #111; --card: #fff; --muted: #666; --line: #d1d5db; --bad: #b00020; --ok: #15803d;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111827; --fg: #f3f4f6; --card: #1f2937; --muted: #9ca3af; --line: #374151; --bad: #f87171; --ok: #4ade80; }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; }
+  header { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px 16px 8px; }
+  .logo { display: block; width: min(320px, 70vw); height: auto; }
+  nav { display: flex; gap: 16px; font-size: 14px; }
+  nav a { color: var(--fg); }
+  main { width: min(900px, 100%); margin: 0 auto; padding: 16px; }
+  h1 { margin: 0 0 4px; font-size: 22px; }
+  .count { margin: 0 0 16px; color: var(--muted); }
+  input, button, .btn { font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line);
+                        background: var(--card); color: var(--fg); cursor: pointer; text-decoration: none; display: inline-block; }
+  button:disabled { opacity: .6; cursor: default; }
+  .primary { border: 0; background: var(--accent); color: #fff; font-weight: 700; }
+  .primary:hover { filter: brightness(0.92); }
+  .danger { color: var(--bad); border-color: var(--bad); }
+  #status { min-height: 1.5em; margin: 0 0 12px; font-size: 14px; color: var(--bad); }
+  #status.ok { color: var(--ok); }
+  #list { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 16px; }
+  .card { display: flex; flex-direction: column; gap: 10px; padding: 14px; border-radius: 12px;
+          background: var(--card); border: 1px solid var(--line); min-height: 150px; }
+  .card.empty { align-items: center; justify-content: center; color: var(--muted); border-style: dashed; background: transparent; }
+  .title { font-weight: 700; font-size: 16px; word-break: break-word; }
+  .meta { font-size: 12px; color: var(--muted); }
+  .actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: auto; }
+  .actions button, .actions .btn { padding: 6px 10px; font-size: 13px; }
+  .upload { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
+  .upload p { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+</style>
+</head>
+<body>
+<header>
+  <a href="/"><img class="logo" src="/logo.png" alt="TURBOWARP"></a>
+  <nav>
+    <a href="/">← トップへ</a>
+    <a href="/search">作品を探す</a>
+  </nav>
+</header>
+<main>
+  <h1>私の作品</h1>
+  <p class="count" id="count">読み込み中…</p>
+  <p id="status" role="status"></p>
+  <div id="list"></div>
+
+  <div class="upload">
+    <p>パソコンに保存した .sb3 ファイルを、「私の作品」に追加できます(1つの作品は <span id="maxMb">15</span>MB まで)。</p>
+    <input type="file" id="file" accept=".sb3" hidden>
+    <button type="button" class="primary" id="uploadBtn">ファイルから追加</button>
+  </div>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  let state = { max: 5, maxBytes: 15 * 1024 * 1024, projects: [] };
+
+  const setStatus = (text, ok = false) => {
+    $('status').textContent = text || '';
+    $('status').classList.toggle('ok', !!ok);
+  };
+  const fmtSize = (n) => (n >= 1024 * 1024 ? (n / 1024 / 1024).toFixed(1) + ' MB' : Math.max(1, Math.round(n / 1024)) + ' KB');
+  const fmtDate = (s) => {
+    const d = new Date(s);
+    return Number.isNaN(d.getTime()) ? '' : d.toLocaleString('ja-JP', { timeZone: 'Asia/Tokyo', hour12: false });
+  };
+
+  const api = async (path, opts = {}) => {
+    const headers = { 'X-Mirror': '1' };
+    if (opts.json !== undefined) headers['Content-Type'] = 'application/json';
+    if (opts.raw !== undefined) headers['Content-Type'] = 'application/octet-stream';
+    const res = await fetch(path, {
+      method: opts.method || 'GET',
+      headers,
+      credentials: 'same-origin',
+      body: opts.json !== undefined ? JSON.stringify(opts.json) : opts.raw
+    });
+    if (res.status === 401) {
+      location.reload();
+      throw new Error('ログインが必要です');
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || ('エラーが発生しました(' + res.status + ')'));
+    return data;
+  };
+
+  const button = (label, onClick, className) => {
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.textContent = label;
+    if (className) b.className = className;
+    b.addEventListener('click', async () => {
+      b.disabled = true;
+      try { await onClick(); } finally { b.disabled = false; }
+    });
+    return b;
+  };
+
+  const render = () => {
+    const list = $('list');
+    list.replaceChildren();
+    $('count').textContent = state.projects.length + ' / ' + state.max + ' 個を保存中';
+    $('maxMb').textContent = String(Math.round(state.maxBytes / 1024 / 1024));
+    $('uploadBtn').disabled = state.projects.length >= state.max;
+
+    for (const p of state.projects) {
+      const card = document.createElement('div');
+      card.className = 'card';
+
+      const title = document.createElement('div');
+      title.className = 'title';
+      title.textContent = p.title;
+
+      const meta = document.createElement('div');
+      meta.className = 'meta';
+      meta.textContent = '更新: ' + fmtDate(p.updated_at) + ' ・ ' + fmtSize(p.size);
+
+      const actions = document.createElement('div');
+      actions.className = 'actions';
+
+      const open = document.createElement('a');
+      open.className = 'btn primary';
+      open.href = '/my/open/' + encodeURIComponent(p.id);
+      open.textContent = '開く';
+
+      const download = document.createElement('a');
+      download.className = 'btn';
+      download.href = '/my/api/projects/' + encodeURIComponent(p.id) + '/file';
+      download.textContent = 'ダウンロード';
+
+      actions.append(
+        open,
+        button('名前を変える', async () => {
+          const name = prompt('新しい名前を入力してください', p.title);
+          if (name === null || !name.trim()) return;
+          try {
+            await api('/my/api/projects/' + p.id + '/rename', { method: 'POST', json: { title: name } });
+            await load();
+          } catch (err) { setStatus(err.message); }
+        }),
+        download,
+        button('削除', async () => {
+          if (!confirm('「' + p.title + '」を削除します。この操作は元に戻せません。')) return;
+          try {
+            await api('/my/api/projects/' + p.id, { method: 'DELETE' });
+            setStatus('削除しました', true);
+            await load(true);
+          } catch (err) { setStatus(err.message); }
+        }, 'danger')
+      );
+
+      card.append(title, meta, actions);
+      list.append(card);
+    }
+
+    for (let i = state.projects.length; i < state.max; i++) {
+      const empty = document.createElement('div');
+      empty.className = 'card empty';
+      empty.textContent = '空き';
+      list.append(empty);
+    }
+  };
+
+  const load = async (keepStatus) => {
+    if (!keepStatus) setStatus('');
+    try {
+      state = await api('/my/api/projects');
+      render();
+    } catch (err) {
+      $('count').textContent = '';
+      setStatus(err.message);
+    }
+  };
+
+  $('uploadBtn').addEventListener('click', () => $('file').click());
+  $('file').addEventListener('change', async () => {
+    const file = $('file').files[0];
+    $('file').value = '';
+    if (!file) return;
+    if (!/\.sb3$/i.test(file.name)) return setStatus('.sb3 ファイルを選んでください');
+    if (file.size > state.maxBytes) return setStatus('ファイルが大きすぎます(上限 ' + fmtSize(state.maxBytes) + ')');
+    const title = file.name.replace(/\.sb3$/i, '').slice(0, 60) || '無題の作品';
+    setStatus('追加中…', true);
+    try {
+      await api('/my/api/projects?title=' + encodeURIComponent(title), { method: 'POST', raw: file });
+      setStatus('「' + title + '」を追加しました', true);
+      await load(true);
+    } catch (err) {
+      setStatus(err.message);
+    }
+  });
+
+  load();
+})();
+</script>
+</body>
+</html>

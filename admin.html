@@ -261,7 +261,7 @@
             } catch (err) { setMsg($('accountsMsg'), err.message); }
           }),
           actionButton('削除', async () => {
-            if (!confirm('「' + a.username + '」を削除します。この操作は元に戻せません。')) return;
+            if (!confirm('「' + a.username + '」を削除します。保存されている「私の作品」もすべて削除されます。この操作は元に戻せません。')) return;
             try {
               await api('accounts/' + a.id, { method: 'DELETE' });
               await Promise.all([loadAccounts(), loadLogs(true)]);

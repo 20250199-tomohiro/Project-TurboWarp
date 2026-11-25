@@ -1,10 +1,21 @@
-// ナビゲーションバーの右端に、ログイン中のアカウント名とログアウトのメニューを表示する
+// ナビゲーションバーの右端に、ログイン中のアカウント名とメニュー(私の作品・保存・ログアウト)を表示する
 (() => {
   if (window.__accountMenuLoaded) return;
   window.__accountMenuLoaded = true;
 
   const ID = 'mirror-account-menu';
   let username = '';
+  let projects = [];
+  let maxProjects = 5;
+  let maxBytes = 15 * 1024 * 1024;
+  let currentPid = null;
+  let vmCache = null;
+
+  // 「私の作品」から開いたときは、URLに mirror_pid が付く。上書き保存の対象はこの作品だけ
+  try {
+    const pid = new URLSearchParams(location.search).get('mirror_pid');
+    if (/^\d+$/.test(pid || '')) currentPid = Number(pid);
+  } catch (e) { /* 何もしない */ }
 
   const style = document.createElement('style');
   style.textContent = `
@@ -18,17 +29,172 @@
                        color: #fff; font: inherit; font-weight: 700; cursor: pointer; }
     #${ID} .mas-name:hover, #${ID} .mas-name[aria-expanded="true"] { background: rgba(255, 255, 255, .18); }
     #${ID} .mas-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-    #${ID} .mas-menu { position: absolute; top: calc(100% + 4px); right: 0; min-width: 200px; padding: 10px;
-                       border-radius: 8px; background: #fff; color: #111;
+    #${ID} .mas-menu { position: absolute; top: calc(100% + 4px); right: 0; min-width: 240px; padding: 10px;
+                       border-radius: 8px; background: #fff; color: #111; display: flex; flex-direction: column; gap: 6px;
                        border: 1px solid rgba(0, 0, 0, .15); box-shadow: 0 6px 20px rgba(0, 0, 0, .3); }
     #${ID} .mas-menu[hidden] { display: none; }
-    #${ID} .mas-who { margin-bottom: 8px; font-size: 12px; color: #555; word-break: break-all; }
-    #${ID} .mas-logout { display: block; box-sizing: border-box; width: 100%; padding: 8px 12px; border-radius: 6px;
-                         background: #FF4C4C; color: #fff; font-weight: 700; text-align: center; text-decoration: none; }
+    #${ID} .mas-who { margin-bottom: 2px; font-size: 12px; color: #555; word-break: break-all; }
+    #${ID} .mas-item, #${ID} .mas-logout { display: block; box-sizing: border-box; width: 100%; padding: 8px 12px;
+                         border-radius: 6px; border: 0; font: inherit; font-weight: 700; text-align: center;
+                         text-decoration: none; cursor: pointer; }
+    #${ID} .mas-item { background: #eceff3; color: #111; }
+    #${ID} .mas-item:hover { background: #dde2e9; }
+    #${ID} .mas-item:disabled { opacity: .6; cursor: default; }
+    #${ID} .mas-logout { background: #FF4C4C; color: #fff; }
     #${ID} .mas-logout:hover { filter: brightness(0.92); }
+    #${ID} .mas-sep { height: 1px; margin: 2px 0; background: rgba(0, 0, 0, .12); }
+    #mirror-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 2147483001;
+                    max-width: min(90vw, 480px); padding: 10px 16px; border-radius: 8px; background: #222; color: #fff;
+                    font: 14px system-ui, sans-serif; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
+    #mirror-toast.error { background: #b00020; }
   `;
   document.head.append(style);
 
+  // ---------- 通知 ----------
+  let toastTimer = null;
+  const toast = (text, isError = false) => {
+    let el = document.getElementById('mirror-toast');
+    if (!el) {
+      el = document.createElement('div');
+      el.id = 'mirror-toast';
+      el.setAttribute('role', 'status');
+      document.body.append(el);
+    }
+    el.textContent = text;
+    el.classList.toggle('error', isError);
+    el.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => { el.hidden = true; }, isError ? 7000 : 3500);
+  };
+
+  // ---------- 作品の一覧 ----------
+  const api = async (path, opts = {}) => {
+    const headers = { 'X-Mirror': '1' };
+    if (opts.raw !== undefined) headers['Content-Type'] = 'application/octet-stream';
+    const res = await fetch(path, {
+      method: opts.method || 'GET',
+      headers,
+      credentials: 'same-origin',
+      body: opts.raw
+    });
+    if (res.status === 401) {
+      location.reload();
+      throw new Error('ログインが必要です');
+    }
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || ('エラーが発生しました(' + res.status + ')'));
+    return data;
+  };
+
+  const refreshProjects = async () => {
+    try {
+      const data = await api('/my/api/projects');
+      projects = data.projects || [];
+      maxProjects = data.max || maxProjects;
+      maxBytes = data.maxBytes || maxBytes;
+    } catch (err) { /* 一覧が取れなくても、メニューは使える */ }
+  };
+
+  // ---------- エディターの作品データ(VM)を探す ----------
+  // TurboWarp の画面部品(React)をたどって、作品を書き出せる vm を見つける
+  const findVm = () => {
+    const isVm = (v) => v && typeof v.saveProjectSb3 === 'function' && typeof v.loadProject === 'function';
+    const fiberOf = (el) => {
+      for (const k of Object.keys(el)) {
+        if (k.startsWith('__reactFiber$') || k.startsWith('__reactInternalInstance$') || k.startsWith('__reactContainer$')) return el[k];
+      }
+      const r = el._reactRootContainer;
+      if (r) return (r._internalRoot && r._internalRoot.current) || r.current || null;
+      return null;
+    };
+    const seen = new Set();
+    let tried = 0;
+    for (const el of [document.body, ...document.querySelectorAll('div')]) {
+      if (tried >= 40) break;
+      const fiber = fiberOf(el);
+      if (!fiber) continue;
+      let root = fiber;
+      while (root.return) root = root.return;
+      if (seen.has(root)) continue;
+      seen.add(root);
+      tried++;
+      const visited = new Set();
+      const stack = [root];
+      let steps = 0;
+      while (stack.length && steps++ < 400000) {
+        const f = stack.pop();
+        if (!f || visited.has(f)) continue;
+        visited.add(f);
+        const p = f.memoizedProps;
+        if (p && typeof p === 'object' && isVm(p.vm)) return p.vm;
+        if (f.sibling) stack.push(f.sibling);
+        if (f.child) stack.push(f.child);
+      }
+    }
+    return null;
+  };
+  const getVm = () => {
+    if (!vmCache) vmCache = findVm();
+    return vmCache;
+  };
+
+  // ---------- 保存 ----------
+  let saving = false;
+  const saveProject = async (overwrite) => {
+    if (saving) return;
+    const vm = getVm();
+    if (!vm) {
+      toast('このページでは保存できません。エディターを開いてから、もう一度お試しください', true);
+      return;
+    }
+    saving = true;
+    try {
+      toast('保存中…');
+      let blob;
+      try {
+        blob = await vm.saveProjectSb3();
+      } catch (err) {
+        toast('作品の書き出しに失敗しました', true);
+        return;
+      }
+      if (!blob || !blob.size) {
+        toast('作品の書き出しに失敗しました', true);
+        return;
+      }
+      if (blob.size > maxBytes) {
+        toast('作品が大きすぎます(上限 ' + Math.round(maxBytes / 1024 / 1024) + 'MB)', true);
+        return;
+      }
+
+      let result;
+      if (overwrite && currentPid) {
+        result = await api('/my/api/projects/' + currentPid, { method: 'PUT', raw: blob });
+      } else {
+        const name = prompt('作品の名前を入力してください', '無題の作品');
+        if (name === null) {
+          toast('保存をやめました');
+          return;
+        }
+        result = await api('/my/api/projects?title=' + encodeURIComponent(name.trim() || '無題の作品'), { method: 'POST', raw: blob });
+        currentPid = result.id;
+        try {
+          const url = new URL(location.href);
+          url.searchParams.set('mirror_pid', String(result.id));
+          history.replaceState(history.state, '', url.toString());
+        } catch (e) { /* 何もしない */ }
+      }
+      toast('「' + result.title + '」を保存しました');
+      await refreshProjects();
+      updateMenu();
+    } catch (err) {
+      toast(err.message || '保存に失敗しました', true);
+    } finally {
+      saving = false;
+    }
+  };
+
+  // ---------- メニュー ----------
+  const els = {};
   const build = () => {
     const wrap = document.createElement('div');
     wrap.id = ID;
@@ -49,18 +215,39 @@
     const menu = document.createElement('div');
     menu.className = 'mas-menu';
     menu.hidden = true;
+
     const who = document.createElement('div');
     who.className = 'mas-who';
     who.textContent = 'ログイン中: ' + username;
+
+    const myLink = document.createElement('a');
+    myLink.className = 'mas-item';
+    myLink.href = '/my';
+
+    const saveNew = document.createElement('button');
+    saveNew.type = 'button';
+    saveNew.className = 'mas-item';
+    saveNew.addEventListener('click', () => { setOpen(false); saveProject(false); });
+
+    const saveOver = document.createElement('button');
+    saveOver.type = 'button';
+    saveOver.className = 'mas-item';
+    saveOver.addEventListener('click', () => { setOpen(false); saveProject(true); });
+
+    const sep = document.createElement('div');
+    sep.className = 'mas-sep';
+
     const logout = document.createElement('a');
     logout.className = 'mas-logout';
     logout.href = '/logout';
     logout.textContent = 'ログアウト';
-    menu.append(who, logout);
+
+    menu.append(who, myLink, saveNew, saveOver, sep, logout);
 
     const setOpen = (open) => {
       menu.hidden = !open;
       btn.setAttribute('aria-expanded', String(open));
+      if (open) refreshProjects().then(updateMenu);
     };
     btn.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -74,7 +261,20 @@
     });
 
     wrap.append(btn, menu);
+    Object.assign(els, { myLink, saveNew, saveOver });
     return wrap;
+  };
+
+  const updateMenu = () => {
+    if (!els.myLink) return;
+    els.myLink.textContent = '私の作品(' + projects.length + ' / ' + maxProjects + ')';
+    const full = projects.length >= maxProjects;
+    els.saveNew.textContent = '新しい作品として保存';
+    els.saveNew.disabled = full;
+    els.saveNew.title = full ? '保存できる作品は' + maxProjects + '個までです。「私の作品」で削除してください' : '';
+    const target = currentPid ? projects.find((p) => p.id === currentPid) : null;
+    els.saveOver.hidden = !target;
+    if (target) els.saveOver.textContent = '上書き保存「' + target.title + '」';
   };
 
   // TurboWarp のメニューバー(「設定」「ファイル」などが並ぶ横長の領域)を探す。見つからなければ画面右上に固定する
@@ -90,7 +290,10 @@
   const attach = () => {
     if (!username) return;
     let wrap = document.getElementById(ID);
-    if (!wrap) wrap = build();
+    if (!wrap) {
+      wrap = build();
+      updateMenu();
+    }
     const bar = findMenuBar();
     wrap.classList.toggle('mas-fixed', !bar);
     const target = bar || document.body;
@@ -115,6 +318,7 @@
       if (data && typeof data.username === 'string' && data.username) {
         username = data.username;
         schedule();
+        refreshProjects().then(updateMenu);
       }
     })
     .catch(() => {});
