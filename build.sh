@@ -4,8 +4,8 @@ set -euo pipefail
 : "${EXTENSIONS_HOST:?EXTENSIONS_HOST を設定してください}"
 
 # ---- キャッシュの準備 ----
-# Render はビルド間で $XDG_CACHE_HOME(通常は ~/.cache)を保持する
-CACHE_ROOT="${XDG_CACHE_HOME:-$HOME/.cache}/mirror-gui"
+# Render がビルド間で確実に保持するのは、プロジェクトのフォルダ内。ここに保存する
+CACHE_ROOT="$PWD/.build-cache"
 
 # scratch-gui の最新コミット。取得に失敗したら毎回違う値にして、必ずフルビルドにする
 GUI_COMMIT="$(git ls-remote https://github.com/TurboWarp/scratch-gui HEAD 2>/dev/null | cut -f1 || true)"
@@ -14,6 +14,13 @@ GUI_COMMIT="$(git ls-remote https://github.com/TurboWarp/scratch-gui HEAD 2>/dev
 # キャッシュの鍵: scratch-gui の版 + 置換先のドメイン + この build.sh の中身
 KEY="$(printf '%s|%s|%s|%s' "$GUI_COMMIT" "$TRAMPOLINE_HOST" "$EXTENSIONS_HOST" "$(sha256sum build.sh | cut -d' ' -f1)" | sha256sum | cut -c1-16)"
 CACHED="$CACHE_ROOT/$KEY"
+
+echo "--- 診断(キャッシュが効かないときは、この部分を教えてください) ---"
+echo "scratch-gui の版: $GUI_COMMIT"
+echo "キャッシュの鍵: $KEY"
+echo "保存先: $CACHE_ROOT"
+ls -la "$CACHE_ROOT" 2>/dev/null || echo "(保存先がまだありません)"
+echo "---"
 
 rm -rf scratch-gui
 
