@@ -300,6 +300,34 @@
     if (wrap.parentElement !== target || target.lastElementChild !== wrap) target.append(wrap);
   };
 
+  // ---------- TurboWarp 標準の「パソコンへの保存」を使えなくする ----------
+  // 「コンピューターに保存」と「"ファイル名".sb3 に保存」の2つのメニュー項目を隠し、Ctrl+S も止める
+  const HIDE_PATTERNS = [
+    /コンピュー?ターに保存/,
+    /Save to your computer/i,
+    /\.sb3.*保存|保存.*\.sb3/,
+    /Save as .*\.sb3/i
+  ];
+  const shouldHide = (text) => HIDE_PATTERNS.some((re) => re.test(text));
+  const hideSaveItems = () => {
+    for (const el of document.querySelectorAll('[class*="menu_menu-item"], [role="menuitem"], li')) {
+      if (el.dataset.masHidden || el.closest('#' + ID)) continue;
+      const text = (el.textContent || '').trim();
+      if (!text || text.length > 80) continue;
+      if (shouldHide(text)) {
+        el.style.display = 'none';
+        el.dataset.masHidden = '1';
+      }
+    }
+  };
+  window.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && !e.altKey && (e.key === 's' || e.key === 'S')) {
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      toast('パソコンへの保存はできません。アカウント名のメニューから、「私の作品」に保存してください');
+    }
+  }, true);
+
   let scheduled = false;
   const schedule = () => {
     if (scheduled) return;
@@ -307,10 +335,12 @@
     requestAnimationFrame(() => {
       scheduled = false;
       attach();
+      hideSaveItems();
     });
   };
 
   new MutationObserver(schedule).observe(document.documentElement, { childList: true, subtree: true });
+  schedule();
 
   fetch('/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
     .then((res) => (res.ok ? res.json() : null))
