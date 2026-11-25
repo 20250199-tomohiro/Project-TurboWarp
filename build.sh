@@ -62,3 +62,11 @@ sed -i 's#</body>#<script src="/search-button.js"></script></body>#' \
   scratch-gui/build/index.html scratch-gui/build/player.html
 grep -q "search-button.js" scratch-gui/build/index.html || { echo "index.html への差し込みに失敗しました"; exit 1; }
 grep -q "search-button.js" scratch-gui/build/player.html || { echo "player.html への差し込みに失敗しました"; exit 1; }
+
+# アカウントメニューのスクリプトを、すべてのHTMLページに差し込む
+cp account-menu.js scratch-gui/build/account-menu.js
+for f in scratch-gui/build/*.html; do
+  sed -i 's#</body>#<script src="/account-menu.js"></script></body>#' "$f"
+done
+grep -q "account-menu.js" scratch-gui/build/index.html || { echo "account-menu.js の差し込みに失敗しました"; exit 1; }
+grep -q "account-menu.js" scratch-gui/build/editor.html || { echo "editor.html への差し込みに失敗しました"; exit 1; }
