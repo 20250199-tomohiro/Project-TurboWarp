@@ -14,8 +14,8 @@ CACHE_DIR_B="$PWD/.build-cache"
 GUI_COMMIT="$(git ls-remote https://github.com/TurboWarp/scratch-gui HEAD 2>/dev/null | cut -f1 || true)"
 [ -n "$GUI_COMMIT" ] || GUI_COMMIT="unknown-$(date +%s)"
 
-# キャッシュの鍵: scratch-gui の版 + 置換先のドメイン + この build.sh の中身
-KEY="$(printf '%s|%s|%s|%s' "$GUI_COMMIT" "$TRAMPOLINE_HOST" "$EXTENSIONS_HOST" "$(sha256sum build.sh | cut -d' ' -f1)" | sha256sum | cut -c1-16)"
+# キャッシュの鍵: scratch-gui の版 + 置換先のドメイン + この build.sh と patch-gui.py の中身
+KEY="$(printf '%s|%s|%s|%s' "$GUI_COMMIT" "$TRAMPOLINE_HOST" "$EXTENSIONS_HOST" "$(cat build.sh patch-gui.py | sha256sum | cut -d' ' -f1)" | sha256sum | cut -c1-16)"
 CACHED=""
 for d in "$CACHE_DIR_A" "$CACHE_DIR_B"; do
   if [ -d "$d/$KEY/build" ]; then CACHED="$d/$KEY"; break; fi
@@ -55,6 +55,9 @@ else
     src/containers/extension-library.jsx \
     src/lib/libraries/extensions/index.jsx \
     src/containers/tw-security-manager.jsx
+
+  # TurboWarp 標準の「パソコンへの保存」メニューを、ソースから取り除く(アカウントメニューの保存と競合するため)
+  python3 ../patch-gui.py
 
   NODE_ENV=production npm run build
   cd ..
