@@ -4,8 +4,11 @@ set -euo pipefail
 : "${EXTENSIONS_HOST:?EXTENSIONS_HOST を設定してください}"
 
 # ---- キャッシュの準備 ----
-# Render がビルド間で確実に保持するのは、プロジェクトのフォルダ内。ここに保存する
-CACHE_ROOT="$PWD/.build-cache"
+# Render が次のビルドに引き継ぐと公式に説明されているのは $XDG_CACHE_HOME の中。
+# 念のため、プロジェクトのフォルダ内にも保存して、どちらが効くかを診断で確認する
+CACHE_BASE_A="${XDG_CACHE_HOME:-$HOME/.cache}"
+CACHE_DIR_A="$CACHE_BASE_A/mirror-gui"
+CACHE_DIR_B="$PWD/.build-cache"
 
 # scratch-gui の最新コミット。取得に失敗したら毎回違う値にして、必ずフルビルドにする
 GUI_COMMIT="$(git ls-remote https://github.com/TurboWarp/scratch-gui HEAD 2>/dev/null | cut -f1 || true)"
@@ -13,19 +16,25 @@ GUI_COMMIT="$(git ls-remote https://github.com/TurboWarp/scratch-gui HEAD 2>/dev
 
 # キャッシュの鍵: scratch-gui の版 + 置換先のドメイン + この build.sh の中身
 KEY="$(printf '%s|%s|%s|%s' "$GUI_COMMIT" "$TRAMPOLINE_HOST" "$EXTENSIONS_HOST" "$(sha256sum build.sh | cut -d' ' -f1)" | sha256sum | cut -c1-16)"
-CACHED="$CACHE_ROOT/$KEY"
+CACHED=""
+for d in "$CACHE_DIR_A" "$CACHE_DIR_B"; do
+  if [ -d "$d/$KEY/build" ]; then CACHED="$d/$KEY"; break; fi
+done
 
 echo "--- 診断(キャッシュが効かないときは、この部分を教えてください) ---"
 echo "scratch-gui の版: $GUI_COMMIT"
 echo "キャッシュの鍵: $KEY"
-echo "保存先: $CACHE_ROOT"
-ls -la "$CACHE_ROOT" 2>/dev/null || echo "(保存先がまだありません)"
+echo "XDG_CACHE_HOME: ${XDG_CACHE_HOME:-(未設定)}"
+echo "前回の印(XDG側): $(cat "$CACHE_BASE_A/mirror-marker" 2>/dev/null || echo なし)"
+echo "前回の印(プロジェクト内): $(cat "$CACHE_DIR_B/marker" 2>/dev/null || echo なし)"
+echo "保存先A の中身: $(ls "$CACHE_DIR_A" 2>/dev/null | tr '\n' ' ' || true)"
+echo "保存先B の中身: $(ls "$CACHE_DIR_B" 2>/dev/null | tr '\n' ' ' || true)"
 echo "---"
 
 rm -rf scratch-gui
 
-if [ -d "$CACHED/build" ]; then
-  echo "--- キャッシュを使用します: $KEY ---"
+if [ -n "$CACHED" ]; then
+  echo "--- キャッシュを使用します: $CACHED ---"
   mkdir -p scratch-gui
   cp -r "$CACHED/build" scratch-gui/build
 else
@@ -50,11 +59,18 @@ else
   NODE_ENV=production npm run build
   cd ..
 
-  # 古いキャッシュを消して、今回のビルド結果(patch.py を通す前)を保存する
-  rm -rf "$CACHE_ROOT"
-  mkdir -p "$CACHED"
-  cp -r scratch-gui/build "$CACHED/build"
+  # 古いキャッシュを消して、今回のビルド結果(patch.py を通す前)を、2か所に保存する
+  for d in "$CACHE_DIR_A" "$CACHE_DIR_B"; do
+    rm -rf "$d"
+    mkdir -p "$d/$KEY"
+    cp -r scratch-gui/build "$d/$KEY/build"
+  done
 fi
+
+# 保存先が次のビルドに引き継がれるかを確かめるための印(毎回更新する)
+mkdir -p "$CACHE_BASE_A" "$CACHE_DIR_B"
+date -u +%FT%TZ > "$CACHE_BASE_A/mirror-marker"
+date -u +%FT%TZ > "$CACHE_DIR_B/marker"
 
 # ---- ここから下は毎回実行(軽い処理) ----
 
