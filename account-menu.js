@@ -76,11 +76,12 @@ try {
   const api = async (path, opts = {}) => {
     const headers = { 'X-Mirror': '1' };
     if (opts.raw !== undefined) headers['Content-Type'] = 'application/octet-stream';
+    else if (opts.json !== undefined) headers['Content-Type'] = 'application/json';
     const res = await fetch(path, {
       method: opts.method || 'GET',
       headers,
       credentials: 'same-origin',
-      body: opts.raw
+      body: opts.raw !== undefined ? opts.raw : (opts.json !== undefined ? JSON.stringify(opts.json) : undefined)
     });
     if (res.status === 401) {
       location.reload();
@@ -198,6 +199,45 @@ try {
     }
   };
 
+  const socialApi = async (path, options = {}) => {
+    const response = await fetch('/api/social' + path, {
+      method: options.method || 'GET', credentials: 'same-origin',
+      headers: { 'X-Mirror': '1', ...(options.json !== undefined ? {'Content-Type':'application/json'} : {}) },
+      body: options.json !== undefined ? JSON.stringify(options.json) : undefined
+    });
+    const data = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(data.message || '通信に失敗しました');
+    return data;
+  };
+  const showFriendCode = async () => { try { const d = await socialApi('/friends'); alert('フレンドコード: ' + d.code); } catch (e) { toast(e.message, true); } };
+  const addFriend = async () => {
+    const code = prompt('相手のフレンドコードを入力してください'); if (!code) return;
+    try { await socialApi('/friends/request', {method:'POST', json:{code}}); toast('フレンド申請を送信しました'); } catch (e) { toast(e.message, true); }
+  };
+  const showFriends = async () => {
+    try { const d = await socialApi('/friends');
+      const list = (d.friends || []).map(x => x.id + ': ' + x.username).join('\n') || 'まだフレンドはいません';
+      const incoming = (d.incoming || []).map(x => x.id + ': ' + x.username).join('\n') || '申請はありません';
+      alert('フレンド一覧\n' + list + '\n\n受信した申請\n' + incoming);
+      if (d.incoming && d.incoming.length) { const v = prompt('承認する申請IDを入力（拒否は先頭に -）'); if (v) { const n = Number(v); if (Number.isInteger(n) && n) await socialApi('/friends/requests/' + Math.abs(n) + '/respond', {method:'POST',json:{accept:n>0}}); } }
+    } catch (e) { toast(e.message, true); }
+  };
+  const openMessages = async () => {
+    try { const d = await socialApi('/friends'); if (!d.friends.length) return toast('先にフレンドを追加してください', true);
+      const id = Number(prompt('相手のIDを入力\n' + d.friends.map(x => x.id + ': ' + x.username).join('\n')));
+      if (!d.friends.some(x => x.id === id)) return;
+      const h = await socialApi('/messages/' + id); alert((h.messages || []).map(m => (m.sender_id === id ? '相手: ' : '自分: ') + m.body).join('\n') || 'メッセージはありません');
+      const body = prompt('送信するメッセージ'); if (body && body.trim()) { await socialApi('/messages/' + id, {method:'POST',json:{body}}); toast('送信しました'); }
+    } catch (e) { toast(e.message, true); }
+  };
+  const createRoom = async () => {
+    const projectId = currentPid || Number(prompt('共同制作する「私の作品」のID')); if (!Number.isInteger(projectId) || projectId < 1) return;
+    try { const r = await socialApi('/rooms', {method:'POST',json:{projectId}}); alert('共同制作コード: ' + r.code); } catch (e) { toast(e.message, true); }
+  };
+  const joinRoom = async () => {
+    const code = prompt('6桁の共同制作コード'); if (!code) return;
+    try { await socialApi('/rooms/join', {method:'POST',json:{code}}); toast('ルームに参加しました。作品同期は未実装です。'); } catch (e) { toast(e.message, true); }
+  };
   // ---------- メニュー ----------
   const els = {};
   const build = () => {
@@ -247,7 +287,14 @@ try {
     logout.href = '/logout';
     logout.textContent = 'ログアウト';
 
-    menu.append(who, myLink, saveNew, saveOver, sep, logout);
+    const socialButton = (text, action) => { const b = document.createElement('button'); b.type='button'; b.className='mas-item'; b.textContent=text; b.addEventListener('click', action); return b; };
+    menu.append(who, myLink, saveNew, saveOver, sep,
+      socialButton('フレンドコード', showFriendCode),
+      socialButton('フレンド一覧・申請', showFriends),
+      socialButton('フレンドを追加', addFriend),
+      socialButton('メッセージ', openMessages),
+      socialButton('共同制作ルームを作成', createRoom),
+      socialButton('共同制作に参加', joinRoom), sep.cloneNode(), logout);
 
     const setOpen = (open) => {
       menu.hidden = !open;
