@@ -203,3 +203,40 @@ body.mirror-search-page #more{display:block;margin:24px auto!important}
   filter:brightness(.94);
   color:#fff!important;
 }
+
+/* Keep account dropdown visually consistent with TurboWarp menu surfaces. */
+.mirror-menu-dropdown .mirror-menu-pop{
+  min-width:220px!important;
+  padding:6px!important;
+  border:1px solid var(--mirror-border)!important;
+  border-radius:6px!important;
+  background:var(--mirror-panel)!important;
+  color:var(--mirror-text)!important;
+  box-shadow:0 4px 14px rgba(0,0,0,.22)!important;
+}
+.mirror-menu-dropdown .mirror-account-status{
+  display:flex!important;
+  flex-direction:column!important;
+  gap:4px!important;
+  padding:10px 12px!important;
+  color:var(--mirror-text)!important;
+}
+.mirror-menu-dropdown .mirror-account-name{font-weight:700!important}
+.mirror-menu-dropdown .mirror-account-id{color:var(--mirror-muted)!important;font-size:12px!important}
+.mirror-menu-dropdown .mirror-menu-option{
+  display:flex!important;
+  align-items:center!important;
+  width:100%!important;
+  min-height:36px!important;
+  padding:7px 10px!important;
+  border:0!important;
+  border-radius:4px!important;
+  background:transparent!important;
+  color:var(--mirror-text)!important;
+  text-align:left!important;
+  font:inherit!important;
+}
+.mirror-menu-dropdown .mirror-menu-option:hover,
+.mirror-menu-dropdown .mirror-menu-option:focus-visible{
+  background:var(--mirror-soft)!important;
+}
