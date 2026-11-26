@@ -7,6 +7,10 @@ on:
       - 'server.js'
       - 'collaboration.js'
       - 'account-menu.js'
+      - 'package.json'
+      - 'packager.html'
+      - 'my.html'
+      - 'scripts/check-html.js'
       - '.github/workflows/collaboration-check.yml'
   push:
     branches: [feature/friends-collaboration]
