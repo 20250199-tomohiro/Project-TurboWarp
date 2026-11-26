@@ -48,7 +48,7 @@
   #more { display: block; margin: 24px auto; }
 </style>
 <link rel="stylesheet" href="/mirror-ui.css?v=3"><script src="/mirror-theme.js" defer></script></head>
-<body>
+<body class="mirror-search-page">
 <header class="mirror-topbar">
   <a class="mirror-brand" href="/" aria-label="TurboWarp ホーム">TURBOWARP</a>
   <nav class="mirror-main-nav" aria-label="メインナビゲーション">
@@ -66,7 +66,8 @@
     <button type="submit">検索</button>
   </form></div></header>
 <main>
-  <p id="status" role="status"></p>
+  <section class="search-intro"><h1>プロジェクトを探す</h1><p>キーワードを入力して、公開されている作品を検索できます。</p></section>
+  <p id="status" role="status">キーワードを入力して検索してください。</p>
   <div id="results"></div>
   <button id="more" type="button" hidden>もっと見る</button>
 </main>
@@ -187,7 +188,7 @@
   form.addEventListener('submit', (e) => {
     e.preventDefault();
     const q = qInput.value.trim();
-    if (!q) return;
+    if (!q) { setStatus('検索キーワードを入力してください。', true); qInput.focus(); return; }
     current = { q, mode: modeSelect.value, offset: 0 };
     load(true);
   });
