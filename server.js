@@ -629,9 +629,8 @@ app.get('/my/open/:id', async (req, res) => {
   const { rows } = await q('SELECT id FROM projects WHERE id = $1::int AND account_id = $2::int', [id, acc.id]);
   if (!rows[0]) return res.redirect('/my');
   const fileUrl = req.protocol + '://' + req.get('host') + '/my/dl/' + id + '/' + makeDlToken(id) + '/project.sb3';
-  return res.redirect('/editor.html?project_url=' + encodeURIComponent(fileUrl) + '&mirror_pid=' + id);
-});
-
+  return res.redirect('/editor.html?project_url=' + encodeURIComponent(fileUrl) + '&mirror_pid=' + id + '&mirror_source=myworks');
+  
 app.get('/my/api/projects', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const acc = getLoggedInUser(req);
