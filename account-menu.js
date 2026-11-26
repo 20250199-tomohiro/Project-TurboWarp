@@ -230,9 +230,10 @@ try {
       const body = prompt('送信するメッセージ'); if (body && body.trim()) { await socialApi('/messages/' + id, {method:'POST',json:{body}}); toast('送信しました'); }
     } catch (e) { toast(e.message, true); }
   };
+  const openCollabRoom = code => { const url = new URL(window.location.href); url.searchParams.set('collab_room', code); window.location.assign(url.toString()); };
   const createRoom = async () => {
     const projectId = currentPid || Number(prompt('共同制作する「私の作品」のID')); if (!Number.isInteger(projectId) || projectId < 1) return;
-    try { const r = await socialApi('/rooms', {method:'POST',json:{projectId}}); alert('共同制作コード: ' + r.code); } catch (e) { toast(e.message, true); }
+    try { const r = await socialApi('/rooms', {method:'POST',json:{projectId}}); openCollabRoom(r.code); } catch (e) { toast(e.message, true); }
   };
   const manageRoom = async () => {
     const code = prompt('管理する共同制作ルームの6桁コード'); if (!code) return;
@@ -253,7 +254,7 @@ try {
   };
   const joinRoom = async () => {
     const code = prompt('6桁の共同制作コード'); if (!code) return;
-    try { await socialApi('/rooms/join', {method:'POST',json:{code}}); toast('ルームに参加しました。作品同期は未実装です。'); } catch (e) { toast(e.message, true); }
+    try { const r = await socialApi('/rooms/join', {method:'POST',json:{code}}); openCollabRoom(r.code); } catch (e) { toast(e.message, true); }
   };
   // ---------- メニュー ----------
   const els = {};
