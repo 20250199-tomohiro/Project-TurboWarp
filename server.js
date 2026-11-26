@@ -593,6 +593,18 @@ app.use((req, res, next) => {
   return res.status(401).type('html').send(loginPage());
 });
 
+// ---- フレンド・メッセージ・共同制作の専用ページ ----
+for (const [route, file] of [
+  ['/friends', 'friends.html'],
+  ['/messages', 'messages.html'],
+  ['/collaboration', 'collaboration.html']
+]) {
+  app.get(route, (req, res) => {
+    res.set('Cache-Control', 'no-store');
+    res.sendFile(path.join(__dirname, file));
+  });
+}
+
 // ---- ログイン中のアカウント名(ナビゲーションバーの表示用) ----
 app.get('/me', (req, res) => {
   res.set('Cache-Control', 'no-store');
