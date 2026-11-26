@@ -11,7 +11,7 @@ CACHE_DIR_A="$CACHE_BASE_A/mirror-gui"
 CACHE_DIR_B="$PWD/.build-cache"
 
 # scratch-gui の最新コミット。取得に失敗したら毎回違う値にして、必ずフルビルドにする
-GUI_COMMIT="$(git ls-remote https://github.com/TurboWarp/scratch-gui HEAD 2>/dev/null | cut -f1 || true)"
+GUI_COMMIT="$(git ls-remote https://github.com/20250199-tomohiro/Project-TurboWarp-gui refs/heads/develop 2>/dev/null | cut -f1 || true)"
 [ -n "$GUI_COMMIT" ] || GUI_COMMIT="unknown-$(date +%s)"
 
 # キャッシュの鍵: scratch-gui の版 + 置換先のドメイン + この build.sh と patch-gui.py の中身
@@ -39,7 +39,7 @@ if [ -n "$CACHED" ]; then
   cp -r "$CACHED/build" scratch-gui/build
 else
   echo "--- キャッシュがないため、フルビルドします: $KEY ---"
-  git clone --depth 1 https://github.com/TurboWarp/scratch-gui
+  git clone --depth 1 --branch develop https://github.com/20250199-tomohiro/Project-TurboWarp-gui scratch-gui
   cd scratch-gui
   npm ci --no-audit --no-fund --prefer-offline
 
