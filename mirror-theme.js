@@ -70,11 +70,7 @@
         if(!r.ok)throw Error('ログインしていません');
         const a=await r.json();accountStatus.replaceChildren(el('strong','mirror-account-name',a.username),el('small','mirror-account-id','ID: '+a.id));
         account.pop.append(el('div','mirror-menu-separator'));
-        account.pop.append(button('フレンド',()=>location.href='/friends'),button('メッセージ',()=>location.href='/messages'),button('私の作品',()=>location.href='/my'),button('ログアウト',()=>location.href='/logout'));
-        try{
-          const f=await fetch('/api/social/friends',{credentials:'same-origin',cache:'no-store'});
-          if(f.ok){const d=await f.json();account.pop.insertBefore(button('フレンドコード：'+d.code,()=>{navigator.clipboard?.writeText(d.code)}),account.pop.children[1]);}
-        }catch(_){}
+        account.pop.append(button('ログアウト',()=>location.href='/logout'));
       }catch(_){accountStatus.textContent='ログイン';account.pop.append(button('ログイン',()=>location.href='/login'));}
     };
     tools.append(settings.d,account.d);
