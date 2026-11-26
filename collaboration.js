@@ -270,6 +270,14 @@ const createSocialRouter = ({ express, q, getLoggedInUser, maxProjectBytes }) =>
     res.json({ ok: true });
   }));
 
+  router.delete('/rooms/:code/leave', ready(async (req, res) => {
+    const room = await roomForMember(req.params.code.toUpperCase(), req.account.id);
+    if (!room) return res.status(404).json({ message: '参加中のルームが見つかりません' });
+    await q('DELETE FROM collab_room_members WHERE room_id=$1 AND account_id=$2', [room.id, req.account.id]);
+    await q('DELETE FROM collab_presence WHERE room_id=$1 AND account_id=$2', [room.id, req.account.id]);
+    res.json({ ok: true });
+  }));
+
   router.delete('/rooms/:code', ready(async (req, res) => {
     const result = await q('UPDATE collab_rooms SET active=FALSE WHERE code=$1 AND owner_id=$2 RETURNING id', [req.params.code.toUpperCase(), req.account.id]);
     if (!result.rows[0]) return res.status(404).json({ message: '自分が作成したルームが見つかりません' });
