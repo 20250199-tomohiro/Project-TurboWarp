@@ -10,12 +10,12 @@
   --mirror-header-text: var(--menu-bar-foreground, #ffffff);
   --mirror-green: #4caf50;
   --mirror-red: #e64b4b;
-  --mirror-page: #f9f9f9;
-  --mirror-panel: #ffffff;
-  --mirror-text: #575e75;
+  --mirror-page: var(--page-background, #f9f9f9);
+  --mirror-panel: var(--popover-background, var(--page-background, #ffffff));
+  --mirror-text: var(--page-foreground, #575e75);
   --mirror-muted: #858b9e;
   --mirror-border: #e5e5e5;
-  --mirror-input: #ffffff;
+  --mirror-input: var(--input-background, var(--page-background, #ffffff));
   --mirror-shadow: 0 2px 5px rgba(0,0,0,.12);
   color-scheme: light;
 }
@@ -38,8 +38,8 @@ body > header {
   justify-content: flex-start;
   gap: 18px !important;
   padding: 6px max(16px, calc((100vw - 1120px)/2)) !important;
-  background: var(--mirror-blue);
-  color: #fff;
+  background: var(--menu-bar-background, var(--ui-primary, #FF4C4C));
+  color: var(--menu-bar-foreground, #fff);
   box-shadow: 0 2px 4px rgba(0,0,0,.14);
 }
 body > header > a:first-child { display:flex; align-items:center; flex:0 0 auto; }
@@ -67,7 +67,7 @@ body > header nav a {
   border: 0 !important;
   border-radius: 4px !important;
   background: transparent !important;
-  color: #fff !important;
+  color: var(--menu-bar-foreground, #fff) !important;
   font-size: 13px;
   font-weight: 700;
   text-decoration: none;
@@ -112,8 +112,8 @@ input, select, textarea {
   padding: 7px 10px !important;
   border: 1px solid #c6c6c6 !important;
   border-radius: 4px !important;
-  background: #fff !important;
-  color: #575e75 !important;
+  background: var(--input-background, var(--mirror-panel)) !important;
+  color: var(--mirror-text) !important;
   font: inherit !important;
   box-shadow: inset 0 1px 2px rgba(0,0,0,.06);
 }
@@ -126,8 +126,8 @@ button, .btn, a.btn {
   padding: 7px 13px !important;
   border: 1px solid #d0d0d0 !important;
   border-radius: 4px !important;
-  background: #fff !important;
-  color: #575e75 !important;
+  background: var(--mirror-panel) !important;
+  color: var(--mirror-text) !important;
   font: inherit !important;
   font-weight: 700;
   text-decoration: none;
@@ -183,8 +183,8 @@ a:hover { color: var(--mirror-blue-hover); }
   html, body { background: #181a1f !important; color: #e5e5e5 !important; }
   body > header { background: var(--mirror-header); }
   h1, h2 { color: #f1f1f1; }
-  .card, section.card { background: #24272e !important; border-color: #3a3e47 !important; }
-  input, select, textarea { background: #1e2127 !important; border-color: #555b66 !important; color: #f1f1f1 !important; }
+  .card, section.card { background: var(--popover-background, #24272e) !important; border-color: #3a3e47 !important; }
+  input, select, textarea { background: var(--input-background, #1e2127) !important; border-color: #555b66 !important; color: var(--mirror-text) !important; }
   button, .btn, a.btn { background: #30343b !important; border-color: #555b66 !important; color: #f1f1f1 !important; }
   button.primary, .btn.primary, .primary { background: var(--mirror-blue) !important; color: #fff !important; }
   .item, .list .item, .check, .note { background: #1e2127 !important; border-color: #3a3e47 !important; color: #e5e5e5 !important; }
