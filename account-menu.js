@@ -234,6 +234,23 @@ try {
     const projectId = currentPid || Number(prompt('共同制作する「私の作品」のID')); if (!Number.isInteger(projectId) || projectId < 1) return;
     try { const r = await socialApi('/rooms', {method:'POST',json:{projectId}}); alert('共同制作コード: ' + r.code); } catch (e) { toast(e.message, true); }
   };
+  const manageRoom = async () => {
+    const code = prompt('管理する共同制作ルームの6桁コード'); if (!code) return;
+    try {
+      const state = await socialApi('/rooms/' + encodeURIComponent(code));
+      const members = (state.members || []).map(x => x.username).join(', ') || 'なし';
+      const todos = state.todos || [];
+      const summary = todos.map(x => (x.done ? '[完了] ' : '[ ] ') + x.id + ': ' + x.title).join('\n') || 'ToDoはありません';
+      const action = prompt('参加者: ' + members + '\n\nToDo:\n' + summary + '\n\n操作: a=追加 / c=完了切替 / d=削除 / x=閉じる');
+      if (action === 'a') { const title = prompt('ToDoの内容'); if (title) await socialApi('/rooms/' + encodeURIComponent(code) + '/todos', {method:'POST',json:{title}}); }
+      if (action === 'c' || action === 'd') { const id = Number(prompt('対象ToDoのID')); if (Number.isInteger(id) && id > 0) {
+        const todo = todos.find(x => x.id === id); if (!todo) return;
+        if (action === 'c') await socialApi('/rooms/' + encodeURIComponent(code) + '/todos/' + id, {method:'PATCH',json:{done:!todo.done}});
+        else await socialApi('/rooms/' + encodeURIComponent(code) + '/todos/' + id, {method:'DELETE'});
+      } }
+      if (action === 'a' || action === 'c' || action === 'd') toast('ToDoを更新しました');
+    } catch (e) { toast(e.message, true); }
+  };
   const joinRoom = async () => {
     const code = prompt('6桁の共同制作コード'); if (!code) return;
     try { await socialApi('/rooms/join', {method:'POST',json:{code}}); toast('ルームに参加しました。作品同期は未実装です。'); } catch (e) { toast(e.message, true); }
@@ -294,7 +311,8 @@ try {
       socialButton('フレンドを追加', addFriend),
       socialButton('メッセージ', openMessages),
       socialButton('共同制作ルームを作成', createRoom),
-      socialButton('共同制作に参加', joinRoom), sep.cloneNode(), logout);
+      socialButton('共同制作に参加', joinRoom),
+      socialButton('共同制作ルーム・ToDo管理', manageRoom), sep.cloneNode(), logout);
 
     const setOpen = (open) => {
       menu.hidden = !open;
