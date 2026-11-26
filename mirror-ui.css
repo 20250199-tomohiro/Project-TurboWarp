@@ -3,8 +3,8 @@
  * blue menu bar, flat white panels, rounded controls and clear focus states.
  */
 :root {
-  --mirror-blue: #4c97ff;
-  --mirror-blue-hover: #4280d7;
+  --mirror-blue: #FF4C4C;
+  --mirror-blue-hover: #e04444;
   --mirror-green: #4caf50;
   --mirror-red: #e64b4b;
   --mirror-page: #f9f9f9;
@@ -115,7 +115,7 @@ input, select, textarea {
   box-shadow: inset 0 1px 2px rgba(0,0,0,.06);
 }
 input:focus, select:focus, textarea:focus {
-  outline: 2px solid rgba(76,151,255,.3);
+  outline: 2px solid rgba(255,76,76,.3);
   border-color: var(--mirror-blue) !important;
 }
 button, .btn, a.btn {
