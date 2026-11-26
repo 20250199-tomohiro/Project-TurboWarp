@@ -3,8 +3,11 @@
  * blue menu bar, flat white panels, rounded controls and clear focus states.
  */
 :root {
-  --mirror-blue: #FF4C4C;
-  --mirror-blue-hover: #e04444;
+  /* Follow the active TurboWarp theme; red is the fallback theme accent. */
+  --mirror-blue: var(--ui-primary, #FF4C4C);
+  --mirror-blue-hover: var(--ui-primary-hover, var(--ui-primary, #e04444));
+  --mirror-header: var(--menu-bar-background, var(--ui-primary, #FF4C4C));
+  --mirror-header-text: var(--menu-bar-foreground, #ffffff);
   --mirror-green: #4caf50;
   --mirror-red: #e64b4b;
   --mirror-page: #f9f9f9;
@@ -178,7 +181,7 @@ a:hover { color: var(--mirror-blue-hover); }
 @media (prefers-color-scheme: dark) {
   :root { color-scheme: dark; }
   html, body { background: #181a1f !important; color: #e5e5e5 !important; }
-  body > header { background: #30343b; }
+  body > header { background: var(--mirror-header); }
   h1, h2 { color: #f1f1f1; }
   .card, section.card { background: #24272e !important; border-color: #3a3e47 !important; }
   input, select, textarea { background: #1e2127 !important; border-color: #555b66 !important; color: #f1f1f1 !important; }
