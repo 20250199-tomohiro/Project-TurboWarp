@@ -305,15 +305,12 @@ try {
     logout.href = '/logout';
     logout.textContent = 'ログアウト';
 
-    const socialButton = (text, action) => { const b = document.createElement('button'); b.type='button'; b.className='mas-item'; b.textContent=text; b.addEventListener('click', action); return b; };
+    const socialLink = (text, href) => { const link = document.createElement('a'); link.className='mas-item'; link.textContent=text; link.href=href; return link; };
     menu.append(who, myLink, saveNew, saveOver, sep,
-      socialButton('フレンドコード', showFriendCode),
-      socialButton('フレンド一覧・申請', showFriends),
-      socialButton('フレンドを追加', addFriend),
-      socialButton('メッセージ', openMessages),
-      socialButton('共同制作ルームを作成', createRoom),
-      socialButton('共同制作に参加', joinRoom),
-      socialButton('共同制作ルーム・ToDo管理', manageRoom), sep.cloneNode(), logout);
+      socialLink('フレンド管理', '/friends'),
+      socialLink('メッセージ', '/messages'),
+      socialLink('共同制作・ToDo', '/collaboration'),
+      sep.cloneNode(), logout);
 
     const setOpen = (open) => {
       menu.hidden = !open;
