@@ -4,6 +4,7 @@
   "private": true,
   "dependencies": {
     "express": "^5.2.1",
-    "pg": "^8.13.0"
+    "pg": "^8.13.0",
+    "@turbowarp/packager": "3.14.0"
   }
 }
