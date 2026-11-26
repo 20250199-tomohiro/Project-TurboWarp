@@ -179,7 +179,13 @@ a { color: var(--mirror-blue); }
 a:hover { color: var(--mirror-blue-hover); }
 #list .card, .card.empty { box-shadow: var(--mirror-shadow); }
 @media (prefers-color-scheme: dark) {
-  :root { color-scheme: dark; }
+  :root {
+    color-scheme: dark;
+    --mirror-page: var(--page-background, #181a1f);
+    --mirror-panel: var(--popover-background, #24272e);
+    --mirror-text: var(--page-foreground, #e5e5e5);
+    --mirror-input: var(--input-background, #1e2127);
+  }
   html, body { background: #181a1f !important; color: #e5e5e5 !important; }
   body > header { background: var(--mirror-header); }
   h1, h2 { color: #f1f1f1; }
