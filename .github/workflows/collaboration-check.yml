@@ -11,6 +11,10 @@ on:
       - 'packager.html'
       - 'my.html'
       - 'scripts/check-html.js'
+      - 'mirror-ui.css'
+      - 'friends.html'
+      - 'messages.html'
+      - 'collaboration.html'
       - '.github/workflows/collaboration-check.yml'
   push:
     branches: [feature/friends-collaboration]
@@ -27,6 +31,8 @@ jobs:
         run: npm install --ignore-scripts
       - name: Verify TurboWarp Packager API
         run: node -e "const p=require('@turbowarp/packager'); if(typeof p.loadProject!=='function'||typeof p.Packager!=='function') process.exit(1); console.log('TurboWarp Packager API OK')"
+      - name: Verify shared UI stylesheet
+        run: test -s mirror-ui.css
       - name: Check JavaScript syntax
         run: |
           node --check server.js
