@@ -239,6 +239,7 @@ const createSocialRouter = ({ express, q, getLoggedInUser, maxProjectBytes }) =>
     if (!room) return res.status(404).json({ message: 'ルームが見つかりません' });
     if (!title || title.length > 300) return res.status(400).json({ message: 'ToDoは1〜300文字にしてください' });
     const result = await q('INSERT INTO collab_todos(room_id,created_by,title,position) VALUES($1,$2,$3,(SELECT COALESCE(MAX(position),0)+1 FROM collab_todos WHERE room_id=$1)) RETURNING id,title,done,created_by,position', [room.id, req.account.id, title]);
+    await q('INSERT INTO collab_events(room_id,account_id,event_type,payload) VALUES($1,$2,$3,$4::jsonb)', [room.id, req.account.id, 'todo-added', JSON.stringify(result.rows[0])]);
     res.json(result.rows[0]);
   }));
 
@@ -249,6 +250,7 @@ const createSocialRouter = ({ express, q, getLoggedInUser, maxProjectBytes }) =>
     if (!Number.isSafeInteger(id) || id < 1) return res.status(400).json({ message: 'ToDo IDが不正です' });
     const result = await q('UPDATE collab_todos SET done=$3 WHERE id=$1 AND room_id=$2 RETURNING id,title,done,created_by,position', [id, room.id, req.body.done === true]);
     if (!result.rows[0]) return res.status(404).json({ message: 'ToDoが見つかりません' });
+    await q('INSERT INTO collab_events(room_id,account_id,event_type,payload) VALUES($1,$2,$3,$4::jsonb)', [room.id, req.account.id, 'todo-updated', JSON.stringify(result.rows[0])]);
     res.json(result.rows[0]);
   }));
 
@@ -257,6 +259,7 @@ const createSocialRouter = ({ express, q, getLoggedInUser, maxProjectBytes }) =>
     const id = Number(req.params.todoId);
     if (!room) return res.status(404).json({ message: 'ルームが見つかりません' });
     await q('DELETE FROM collab_todos WHERE id=$1 AND room_id=$2', [id, room.id]);
+    await q('INSERT INTO collab_events(room_id,account_id,event_type,payload) VALUES($1,$2,$3,$4::jsonb)', [room.id, req.account.id, 'todo-deleted', JSON.stringify({ id })]);
     res.json({ ok: true });
   }));
 
