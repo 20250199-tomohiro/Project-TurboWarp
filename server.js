@@ -678,7 +678,7 @@ app.post('/packager/api/build', requireXhr, express.json({ limit: '8kb' }), asyn
   const safeTitle = cleanPackageTitle(options.title) || cleanPackageTitle(rows[0].title) || 'Packaged Project';
   packager.options.target = target;
   packager.options.app.windowTitle = safeTitle;
-  packager.options.app.packageName = Packager.Packager.getDefaultPackageNameFromFileName(safeTitle);
+  packager.options.app.packageName = safeTitle.toLowerCase().replace(/[^a-z0-9 -]/g, '').trim().replace(/ +/g, '-') || 'packaged-project';
   packager.options.app.version = '1.0.0';
 
   const booleanOptions = [
