@@ -189,3 +189,17 @@ body.mirror-search-page #more{display:block;margin:24px auto!important}
   body.mirror-search-page .mirror-search-form select{grid-column:1;width:100%!important}
   body.mirror-search-page .mirror-search-form button[type="submit"]{grid-column:2;grid-row:2}
 }
+
+/* New-project shortcut: same compact menu-bar rhythm as the Home item. */
+.mirror-main-nav .mirror-new-project{
+  background:var(--mirror-accent)!important;
+  color:#fff!important;
+  font-weight:700!important;
+  border-radius:4px!important;
+  margin:0 5px 0 0!important;
+  padding:0 14px!important;
+}
+.mirror-main-nav .mirror-new-project:hover{
+  filter:brightness(.94);
+  color:#fff!important;
+}
