@@ -40,6 +40,9 @@ try {
                          border-radius: 6px; border: 0; font: inherit; font-weight: 700; text-align: center;
                          text-decoration: none; cursor: pointer; }
     #${ID} .mas-item { background: #eceff3; color: #111; }
+    #${ID} .mas-item[hidden] {
+        display: none !important;
+    }
     #${ID} .mas-item:hover { background: #dde2e9; }
     #${ID} .mas-item:disabled { opacity: .6; cursor: default; }
     #${ID} .mas-logout { background: #FF4C4C; color: #fff; }
