@@ -8,15 +8,17 @@
   let projects = [];
   let maxProjects = 5;
   let maxBytes = 15 * 1024 * 1024;
-  let currentPid = null;
-  let vmCache = null;
+ let currentPid = null;
+let vmCache = null;
 
-  // 「私の作品」から開いたときは、URLに mirror_pid が付く。上書き保存の対象はこの作品だけ
-  try {
-    const pid = new URLSearchParams(location.search).get('mirror_pid');
-    if (/^\d+$/.test(pid || '')) currentPid = Number(pid);
-  } catch (e) { /* 何もしない */ }
+// 「私の作品」から開いたかどうか
+const openedFromMyWorks =
+  new URLSearchParams(location.search).get('mirror_source') === 'myworks';
 
+try {
+  const pid = new URLSearchParams(location.search).get('mirror_pid');
+  if (/^\d+$/.test(pid || '')) currentPid = Number(pid);
+} catch (e) { /* 何もしない */ }
   const style = document.createElement('style');
   style.textContent = `
     #${ID} { position: relative; display: flex; align-items: center; align-self: stretch;
