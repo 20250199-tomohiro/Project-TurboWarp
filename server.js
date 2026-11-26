@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const path = require('path');
 const express = require('express');
 const { Pool } = require('pg');
+const createSocialRouter = require('./collaboration');
 
 // =====================================================================
 // 設定(環境変数)
@@ -295,6 +296,9 @@ const loginPage = (message = '') => `<!doctype html>
 const app = express();
 app.set('trust proxy', 1);
 app.set('x-powered-by', false);
+
+// ---- フレンド・メッセージ・共同制作 API ----
+app.use('/api/social', createSocialRouter({ express, q, getLoggedInUser, maxProjectBytes: MAX_PROJECT_BYTES }));
 
 // ログイン前のページでも表示するロゴ
 app.get('/logo.png', (req, res) => {
