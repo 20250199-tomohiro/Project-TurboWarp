@@ -946,6 +946,12 @@ app.get('/search-thumb/:id', async (req, res) => {
   }
 });
 
+// ---- 共通UIテーマ ----
+app.get('/mirror-ui.css', (req, res) => {
+  res.set('Cache-Control', 'public, max-age=3600');
+  res.type('text/css').sendFile(path.join(__dirname, 'mirror-ui.css'));
+});
+
 // ---- ミラー本体 ----
 app.use(express.static(path.join(__dirname, 'scratch-gui/build')));
 
