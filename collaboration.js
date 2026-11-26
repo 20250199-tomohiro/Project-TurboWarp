@@ -84,6 +84,13 @@ const createSocialRouter = ({ express, q, getLoggedInUser, maxProjectBytes }) =>
         created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
       )`);
       await q('CREATE INDEX IF NOT EXISTS collab_events_room ON collab_events(room_id,id)');
+      await q(`CREATE TABLE IF NOT EXISTS collab_presence (
+        room_id BIGINT NOT NULL REFERENCES collab_rooms(id) ON DELETE CASCADE,
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        state JSONB NOT NULL DEFAULT '{}'::jsonb,
+        updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+        PRIMARY KEY(room_id,account_id)
+      )`);
     })().catch(err => { schemaPromise = null; throw err; });
     return schemaPromise;
   };
@@ -193,7 +200,9 @@ const createSocialRouter = ({ express, q, getLoggedInUser, maxProjectBytes }) =>
     for (let i = 0; i < 12; i++) {
       const code = makeCode(6);
       try {
-        const created = await q('INSERT INTO collab_rooms(code,owner_id,project_id) VALUES($1,$2,$3) RETURNING id,code,revision', [code, req.account.id, projectId]);
+        const created = await q(`INSERT INTO collab_rooms(code,owner_id,project_id,project_data)
+          SELECT $1,$2,id,data FROM projects WHERE id=$3 AND account_id=$2
+          RETURNING id,code,revision`, [code, req.account.id, projectId]);
         await q('INSERT INTO collab_room_members(room_id,account_id) VALUES($1,$2)', [created.rows[0].id, req.account.id]);
         return res.json(created.rows[0]);
       } catch (err) { if (err.code !== '23505') throw err; }
@@ -262,6 +271,73 @@ const createSocialRouter = ({ express, q, getLoggedInUser, maxProjectBytes }) =>
     const result = await q('UPDATE collab_rooms SET active=FALSE WHERE code=$1 AND owner_id=$2 RETURNING id', [req.params.code.toUpperCase(), req.account.id]);
     if (!result.rows[0]) return res.status(404).json({ message: '自分が作成したルームが見つかりません' });
     res.json({ ok: true });
+  }));
+
+
+  // Shared project snapshot: every room member edits one canonical SB3 document.
+  router.get('/rooms/:code/project', ready(async (req, res) => {
+    const room = await roomForMember(req.params.code.toUpperCase(), req.account.id);
+    if (!room) return res.status(404).json({ message: 'ルームが見つかりません' });
+    const data = room.project_data;
+    if (!data) return res.status(404).json({ message: '共有作品データがありません' });
+    res.json({ revision: Number(room.revision), data: Buffer.from(data).toString('base64') });
+  }));
+
+  router.put('/rooms/:code/project', express.raw({ type: 'application/octet-stream', limit: maxProjectBytes || '50mb' }), ready(async (req, res) => {
+    const room = await roomForMember(req.params.code.toUpperCase(), req.account.id);
+    if (!room) return res.status(404).json({ message: 'ルームが見つかりません' });
+    if (!Buffer.isBuffer(req.body) || req.body.length < 4 || req.body.length > maxProjectBytes || req.body[0] !== 0x50 || req.body[1] !== 0x4b) {
+      return res.status(400).json({ message: '有効なSB3プロジェクトデータではありません' });
+    }
+    const expected = Number(req.get('X-Collab-Revision'));
+    if (!Number.isSafeInteger(expected) || expected < 0) return res.status(400).json({ message: 'リビジョン番号が不正です' });
+    const saved = await q(`UPDATE collab_rooms SET project_data=$3,revision=revision+1,updated_at=NOW()
+      WHERE id=$1 AND revision=$2 RETURNING revision,project_id`, [room.id, expected, req.body]);
+    if (!saved.rows[0]) {
+      const latest = await q('SELECT revision FROM collab_rooms WHERE id=$1', [room.id]);
+      return res.status(409).json({ message: '他の参加者が先に変更しました。最新の作品を再読み込みしてください', revision: Number(latest.rows[0].revision) });
+    }
+    await q('UPDATE projects SET data=$2,size=$3,updated_at=NOW() WHERE id=$1', [saved.rows[0].project_id, req.body, req.body.length]);
+    await q('INSERT INTO collab_events(room_id,account_id,event_type,payload) VALUES($1,$2,$3,$4::jsonb)',
+      [room.id, req.account.id, 'project-updated', JSON.stringify({ revision: Number(saved.rows[0].revision) })]);
+    res.json({ ok: true, revision: Number(saved.rows[0].revision) });
+  }));
+
+  // Lightweight long-poll endpoint used by clients to receive room updates.
+  router.get('/rooms/:code/events', ready(async (req, res) => {
+    const room = await roomForMember(req.params.code.toUpperCase(), req.account.id);
+    if (!room) return res.status(404).json({ message: 'ルームが見つかりません' });
+    const after = Math.max(0, Number(req.query.after) || 0);
+    const events = await q(`SELECT id,account_id,event_type,payload,created_at FROM collab_events
+      WHERE room_id=$1 AND id>$2 ORDER BY id ASC LIMIT 100`, [room.id, after]);
+    res.json({ events: events.rows });
+  }));
+
+  // Participants publish editor selection/cursor metadata. This does not expose private keystrokes.
+  router.put('/rooms/:code/presence', ready(async (req, res) => {
+    const room = await roomForMember(req.params.code.toUpperCase(), req.account.id);
+    if (!room) return res.status(404).json({ message: 'ルームが見つかりません' });
+    const state = req.body && typeof req.body === 'object' ? req.body : {};
+    const safe = {
+      sprite: typeof state.sprite === 'string' ? state.sprite.slice(0, 100) : null,
+      target: typeof state.target === 'string' ? state.target.slice(0, 100) : null,
+      x: Number.isFinite(state.x) ? Math.max(-100000, Math.min(100000, state.x)) : null,
+      y: Number.isFinite(state.y) ? Math.max(-100000, Math.min(100000, state.y)) : null,
+      editing: typeof state.editing === 'string' ? state.editing.slice(0, 120) : null
+    };
+    await q(`INSERT INTO collab_presence(room_id,account_id,state,updated_at) VALUES($1,$2,$3::jsonb,NOW())
+      ON CONFLICT(room_id,account_id) DO UPDATE SET state=EXCLUDED.state,updated_at=NOW()`,
+      [room.id, req.account.id, JSON.stringify(safe)]);
+    await q('UPDATE collab_room_members SET last_seen=NOW() WHERE room_id=$1 AND account_id=$2', [room.id, req.account.id]);
+    res.json({ ok: true });
+  }));
+
+  router.get('/rooms/:code/presence', ready(async (req, res) => {
+    const room = await roomForMember(req.params.code.toUpperCase(), req.account.id);
+    if (!room) return res.status(404).json({ message: 'ルームが見つかりません' });
+    const result = await q(`SELECT a.id,a.username,p.state,p.updated_at FROM collab_presence p
+      JOIN accounts a ON a.id=p.account_id WHERE p.room_id=$1 AND p.updated_at>NOW()-INTERVAL '30 seconds'`, [room.id]);
+    res.json({ participants: result.rows });
   }));
 
   return router;
