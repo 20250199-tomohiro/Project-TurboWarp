@@ -310,7 +310,8 @@
   ];
   const shouldHide = (text) => HIDE_PATTERNS.some((re) => re.test(text));
   const hideSaveItems = () => {
-    for (const el of document.querySelectorAll('[class*="menu_menu-item"], [role="menuitem"], li')) {
+    // ファイルメニューの項目と、バーの右側に出る「コンピューターに保存する」ボタンの両方を対象にする
+    for (const el of document.querySelectorAll('[class*="menu_menu-item"], [role="menuitem"], li, [class*="save-status_save-now"]')) {
       if (el.dataset.masHidden || el.closest('#' + ID)) continue;
       const text = (el.textContent || '').trim();
       if (!text || text.length > 80) continue;
