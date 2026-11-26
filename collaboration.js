@@ -324,8 +324,6 @@ const createSocialRouter = ({ express, q, getLoggedInUser, maxProjectBytes }) =>
     const safe = {
       sprite: typeof state.sprite === 'string' ? state.sprite.slice(0, 100) : null,
       target: typeof state.target === 'string' ? state.target.slice(0, 100) : null,
-      blockId: typeof state.blockId === 'string' ? state.blockId.slice(0, 100) : null,
-      blockType: typeof state.blockType === 'string' ? state.blockType.slice(0, 100) : null,
       x: Number.isFinite(state.x) ? Math.max(-100000, Math.min(100000, state.x)) : null,
       y: Number.isFinite(state.y) ? Math.max(-100000, Math.min(100000, state.y)) : null,
       editing: typeof state.editing === 'string' ? state.editing.slice(0, 120) : null
