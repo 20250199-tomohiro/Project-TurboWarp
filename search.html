@@ -49,9 +49,14 @@
 </style>
 <link rel="stylesheet" href="/mirror-ui.css?v=2"><script src="/mirror-theme.js" defer></script></head>
 <body>
-<header>
-  <a href="/"><img class="logo" src="/logo.png" alt="TURBOWARP"></a>
-  <form id="form">
+<header class="mirror-topbar">
+  <a class="mirror-brand" href="/" aria-label="TurboWarp ホーム">TURBOWARP</a>
+  <nav class="mirror-main-nav" aria-label="メインナビゲーション">
+    <a href="/">ホーム</a><a href="/my">私の作品</a><a href="/search">作品を探す</a>
+    <a href="/friends">フレンド</a><a href="/messages">メッセージ</a>
+    <a href="/collaboration">共同制作</a><a href="/packager">パッケージ化</a>
+  </nav>
+<div class="mirror-search-form"><form id="form">
     <input type="search" id="q" placeholder="プロジェクトを検索" maxlength="100" autofocus required aria-label="検索キーワード">
     <select id="mode" aria-label="並び順">
       <option value="popular">人気順</option>
@@ -59,8 +64,7 @@
       <option value="recent">新着順</option>
     </select>
     <button type="submit">検索</button>
-  </form>
-</header>
+  </form></div></header>
 <main>
   <p id="status" role="status"></p>
   <div id="results"></div>
