@@ -1,6 +1,6 @@
 const fs = require('fs');
 const vm = require('vm');
-const files = ['friends.html', 'messages.html', 'collaboration.html', 'packager.html'];
+const files = ['friends.html', 'messages.html', 'collaboration.html', 'packager.html', 'my.html'];
 for (const file of files) {
   const html = fs.readFileSync(file, 'utf8');
   const scripts = [...html.matchAll(/<script[^>]*>([\s\S]*?)<\/script>/gi)];
