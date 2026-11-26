@@ -16,3 +16,8 @@ The authenticated `/packager` page uses the official `@turbowarp/packager` Node.
 The Packager integration is available from the account menu and the "私の作品" page. It only packages projects owned by the signed-in account.
 
 The TurboWarp Packager is licensed under MPL-2.0. See the upstream [TurboWarp/packager](https://github.com/TurboWarp/packager) repository and its license for attribution and license details.
+
+
+## Shared TurboWarp-style UI
+
+Account pages (`/my`, `/friends`, `/messages`, `/collaboration`, and `/packager`) share the root-level `mirror-ui.css` theme. It follows the TurboWarp/Scratch GUI visual language: compact Helvetica typography, a blue menu bar, white panels, compact rounded controls, clear focus states, and responsive navigation. The account dropdown uses the same blue accent and neutral menu styling. A dark color-scheme variant is included.
