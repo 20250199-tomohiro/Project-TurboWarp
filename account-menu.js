@@ -9,7 +9,7 @@
   let maxProjects = 5;
   let maxBytes = 15 * 1024 * 1024;
  let currentPid = null;
-let vmCache = null;
+ let vmCache = null;
 
 // 「私の作品」から開いたかどうか
 const openedFromMyWorks =
