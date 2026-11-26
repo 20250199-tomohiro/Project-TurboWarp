@@ -1,10 +1,19 @@
 /* Shared appearance controls for TurboWarp editor and companion pages. */
 (() => {
   const KEY = 'project-turbowarp-appearance-v2';
-  const defaults = {mode:'dark', accent:'#FF4C4C'};
+  const getDefaults = () => {
+    let previous = {};
+    try { previous = JSON.parse(localStorage.getItem('project-turbowarp-theme') || '{}'); } catch (_) {}
+    const mode = previous['color-scheme'] === 'light' || previous['color-scheme'] === 'dark'
+      ? previous['color-scheme']
+      : (window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+    const accent = /^#[0-9a-f]{6}$/i.test(previous['looks-secondary'] || '')
+      ? previous['looks-secondary'] : '#FF4C4C';
+    return {mode, accent};
+  };
   const read = () => {
-    try { return {...defaults, ...(JSON.parse(localStorage.getItem(KEY) || '{}'))}; }
-    catch (_) { return {...defaults}; }
+    try { return {...getDefaults(), ...(JSON.parse(localStorage.getItem(KEY) || '{}'))}; }
+    catch (_) { return getDefaults(); }
   };
   const save = value => {
     const next = {...read(), ...value};
