@@ -94,7 +94,7 @@ h1 {
 }
 h2 {
   margin: 0 0 12px !important;
-  color: #575e75;
+  color: var(--mirror-text);
   font-size: 17px !important;
   line-height: 1.3;
   font-weight: 700;
@@ -147,7 +147,7 @@ button:focus-visible, a:focus-visible {
 button.primary, .btn.primary, .primary {
   border: 1px solid var(--mirror-blue) !important;
   background: var(--mirror-blue) !important;
-  color: #fff !important;
+  color: var(--menu-bar-foreground, #fff) !important;
 }
 button.primary:hover, .btn.primary:hover, .primary:hover {
   border-color: var(--mirror-blue-hover) !important;
@@ -166,15 +166,15 @@ button.primary:hover, .btn.primary:hover, .primary:hover {
   border: 1px dashed var(--mirror-border);
   border-radius: 6px !important;
   background: var(--mirror-soft) !important;
-  color: #575e75;
+  color: var(--mirror-text);
 }
-.check { border: 1px solid #e8e8e8; border-radius: 5px !important; background: #fafafa !important; }
+.check { border: 1px solid var(--mirror-border); border-radius: 5px !important; background: var(--mirror-soft) !important; color: var(--mirror-text); }
 .check input { accent-color: var(--mirror-blue); }
-.chat { background: #f5f5f5 !important; border: 1px solid #e5e5e5; border-radius: 8px !important; }
-.bubble { border: 1px solid #e4e4e4; border-radius: 12px !important; background: #fff !important; color: #575e75 !important; }
+.chat { background: var(--mirror-soft) !important; border: 1px solid var(--mirror-border); border-radius: 8px !important; }
+.bubble { border: 1px solid var(--mirror-border); border-radius: 12px !important; background: var(--mirror-panel) !important; color: var(--mirror-text) !important; }
 .bubble.mine { border-color: var(--mirror-blue) !important; background: var(--mirror-blue) !important; color: #fff !important; }
-.note { border: 1px solid #e5e5e5; border-radius: 6px !important; background: #f7f7f7 !important; color: #777f91 !important; }
-.progress { background: #e8e8e8 !important; }
+.note { border: 1px solid var(--mirror-border); border-radius: 6px !important; background: var(--mirror-soft) !important; color: var(--mirror-muted) !important; }
+.progress { background: var(--mirror-soft) !important; }
 .progress > div { background: var(--mirror-blue) !important; }
 a { color: var(--mirror-blue); }
 a:hover { color: var(--mirror-blue-hover); }
@@ -188,7 +188,7 @@ a:hover { color: var(--mirror-blue-hover); }
     --mirror-input: var(--input-background, #1e2127);
   }
   html, body { background: var(--mirror-page) !important; color: var(--mirror-text) !important; }
-  body > header { background: var(--mirror-header); }
+  body > header { background: var(--mirror-header); color: var(--mirror-header-text); }
   h1, h2 { color: var(--mirror-text); }
   .card, section.card { background: var(--mirror-panel) !important; border-color: var(--mirror-border) !important; }
   input, select, textarea { background: var(--mirror-input) !important; border-color: var(--mirror-border) !important; color: var(--mirror-text) !important; }
