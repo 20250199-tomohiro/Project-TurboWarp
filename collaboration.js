@@ -226,8 +226,9 @@ const createSocialRouter = ({ express, q, getLoggedInUser, maxProjectBytes }) =>
     const room = await roomForMember(req.params.code.toUpperCase(), req.account.id);
     if (!room) return res.status(404).json({ message: '参加中のルームが見つかりません' });
     await q('UPDATE collab_room_members SET last_seen=NOW() WHERE room_id=$1 AND account_id=$2', [room.id, req.account.id]);
-    const members = await q(`SELECT a.id,a.username,m.joined_at,m.last_seen
+    const members = await q(`SELECT a.id,a.username,m.joined_at,m.last_seen,p.state AS presence
       FROM collab_room_members m JOIN accounts a ON a.id=m.account_id
+      LEFT JOIN collab_presence p ON p.room_id=m.room_id AND p.account_id=m.account_id
       WHERE m.room_id=$1 AND m.last_seen > NOW()-INTERVAL '90 seconds' ORDER BY m.joined_at`, [room.id]);
     const todos = await q('SELECT id,title,done,created_by,position FROM collab_todos WHERE room_id=$1 ORDER BY position,id', [room.id]);
     res.json({ code: room.code, projectId: room.project_id, revision: Number(room.revision), members: members.rows, todos: todos.rows });
