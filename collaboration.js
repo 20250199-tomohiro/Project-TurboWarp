@@ -132,7 +132,7 @@ const createSocialRouter = ({ express, q, getLoggedInUser, maxProjectBytes }) =>
       JOIN accounts a ON a.id=r.from_id WHERE r.to_id=$1 AND r.status='pending' ORDER BY r.created_at`, [req.account.id]);
     const outgoing = await q(`SELECT r.id,a.username,r.created_at FROM friend_requests r
       JOIN accounts a ON a.id=r.to_id WHERE r.from_id=$1 AND r.status='pending' ORDER BY r.created_at`, [req.account.id]);
-    res.json({ code, friends: friends.rows, incoming: incoming.rows, outgoing: outgoing.rows });
+    res.json({ accountId: req.account.id, code, friends: friends.rows, incoming: incoming.rows, outgoing: outgoing.rows });
   }));
 
   router.post('/friends/request', ready(async (req, res) => {
