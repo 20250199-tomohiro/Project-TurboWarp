@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const path = require('path');
 const express = require('express');
 const { Pool } = require('pg');
+const Packager = require('@turbowarp/packager');
 const createSocialRouter = require('./collaboration');
 
 // =====================================================================
@@ -631,6 +632,107 @@ const isSb3 = (buf) => (
   Buffer.isBuffer(buf) && buf.length >= 4 && buf[0] === 0x50 && buf[1] === 0x4b && buf[2] === 0x03 && buf[3] === 0x04
 );
 const rawBody = express.raw({ type: () => true, limit: MAX_PROJECT_BYTES });
+
+const PACKAGER_TARGETS = new Set([
+  'html', 'zip-one-asset',
+  'nwjs-win64', 'nwjs-win32', 'nwjs-mac', 'nwjs-linux-x64',
+  'electron-win32', 'electron-win64', 'electron-win-arm', 'electron-mac',
+  'electron-linux64', 'electron-linux-arm32', 'electron-linux-arm64',
+  'webview-mac'
+]);
+let activePackagerJobs = 0;
+const PACKAGER_MAX_JOBS = 1;
+const PACKAGER_MAX_OUTPUT_BYTES = 250 * 1024 * 1024;
+const cleanPackageTitle = (value) => (
+  typeof value === 'string'
+    ? value.replace(/[\\u0000-\\u001f\\u007f]/g, '').replace(/[\\\\/:*?"<>|]/g, '-').trim().slice(0, 60)
+    : ''
+);
+
+// ---- TurboWarp Packager ----
+app.get('/packager', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'packager.html'));
+});
+
+app.post('/packager/api/build', requireXhr, express.json({ limit: '8kb' }), async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const acc = getLoggedInUser(req);
+  const body = req.body || {};
+  const projectId = parseProjectId(body.projectId);
+  const target = typeof body.target === 'string' ? body.target : 'html';
+  if (!projectId || !PACKAGER_TARGETS.has(target)) {
+    return res.status(400).json({ message: '作品または出力形式を正しく選択してください' });
+  }
+  if (activePackagerJobs >= PACKAGER_MAX_JOBS) {
+    return res.status(429).json({ message: '現在ほかのパッケージを作成中です。完了してから再度お試しください' });
+  }
+  const { rows } = await q(
+    'SELECT title, data FROM projects WHERE id=$1::int AND account_id=$2::int',
+    [projectId, acc.id]
+  );
+  if (!rows[0]) return res.status(404).json({ message: '作品が見つかりません' });
+
+  const options = body.options && typeof body.options === 'object' ? body.options : {};
+  const packager = new Packager.Packager();
+  const safeTitle = cleanPackageTitle(options.title) || cleanPackageTitle(rows[0].title) || 'Packaged Project';
+  packager.options.target = target;
+  packager.options.app.windowTitle = safeTitle;
+  packager.options.app.packageName = Packager.Packager.getDefaultPackageNameFromFileName(safeTitle);
+  packager.options.app.version = '1.0.0';
+
+  const booleanOptions = [
+    'turbo', 'interpolation', 'highQualityPen', 'fencing', 'miscLimits',
+    'autoplay', 'packagedRuntime', 'bakeExtensions'
+  ];
+  for (const key of booleanOptions) {
+    if (typeof options[key] === 'boolean') packager.options[key] = options[key];
+  }
+  if (Number.isInteger(options.framerate)) packager.options.framerate = Math.max(1, Math.min(250, options.framerate));
+  if (Number.isInteger(options.maxClones)) packager.options.maxClones = Math.max(1, Math.min(10000, options.maxClones));
+  if (Number.isInteger(options.stageWidth)) packager.options.stageWidth = Math.max(1, Math.min(4096, options.stageWidth));
+  if (Number.isInteger(options.stageHeight)) packager.options.stageHeight = Math.max(1, Math.min(4096, options.stageHeight));
+  if (['preserve-ratio', 'stretch', 'crop'].includes(options.resizeMode)) packager.options.resizeMode = options.resizeMode;
+  if (options.controls && typeof options.controls === 'object') {
+    for (const key of ['greenFlag', 'stopAll', 'fullscreen', 'pause']) {
+      if (typeof options.controls[key] === 'boolean') packager.options.controls[key].enabled = options.controls[key];
+    }
+  }
+  if (options.chunks && typeof options.chunks === 'object') {
+    for (const key of ['gamepad', 'pointerlock']) {
+      if (typeof options.chunks[key] === 'boolean') packager.options.chunks[key] = options.chunks[key];
+    }
+  }
+  if (typeof options.username === 'string') {
+    packager.options.username = options.username.replace(/[^A-Za-z0-9_#-]/g, '').slice(0, 20) || 'player####';
+  }
+
+  activePackagerJobs++;
+  try {
+    packager.project = await Packager.loadProject(Buffer.from(rows[0].data));
+    const result = await packager.package();
+    const data = typeof result.data === 'string' ? Buffer.from(result.data, 'utf8') : Buffer.from(result.data);
+    if (data.length > PACKAGER_MAX_OUTPUT_BYTES) {
+      return res.status(413).json({ message: '生成されたファイルが大きすぎます。オプションを減らして再度お試しください' });
+    }
+    const filename = (safeTitle.replace(/[\\\\/:*?"<>|]/g, '-') || 'project') + (result.type === 'text/html' ? '.html' : '.zip');
+    res.set('Content-Type', result.type);
+    res.set('Content-Length', String(data.length));
+    res.set('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(filename));
+    res.set('X-Content-Type-Options', 'nosniff');
+    return res.send(data);
+  } catch (error) {
+    console.error('Packager error:', error && error.stack ? error.stack : error);
+    return res.status(500).json({
+      message: error && /outdated|build id/i.test(error.message)
+        ? 'パッケージャーの素材が古くなっています。管理者に連絡してください'
+        : 'パッケージの作成に失敗しました。作品や出力形式を確認して再度お試しください'
+    });
+  } finally {
+    activePackagerJobs--;
+  }
+});
+
 
 app.get('/my', (req, res) => {
   res.set('Cache-Control', 'no-store');
