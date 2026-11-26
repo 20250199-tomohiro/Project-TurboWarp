@@ -602,6 +602,12 @@ app.use((req, res, next) => {
   return res.status(401).type('html').send(loginPage());
 });
 
+// ---- 専用ホームページ ----
+app.get('/', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'home.html'));
+});
+
 // ---- フレンド・メッセージ・共同制作の専用ページ ----
 for (const [route, file] of [
   ['/friends', 'friends.html'],
