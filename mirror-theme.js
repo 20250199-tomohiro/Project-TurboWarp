@@ -3,7 +3,11 @@
   const KEY='project-turbowarp-appearance-v2';
   const parse=(s,f={})=>{try{return {...f,...JSON.parse(s||'{}')}}catch(_){return {...f}}};
   const palettes={red:['#ff4c4c','#e04444'],purple:['#9966ff','#8555e6'],blue:['#4c97ff','#3685ee'],rainbow:['#ff4c4c','#e04444']};
-  const read=()=>parse(localStorage.getItem(KEY),{mode:'dark',accentTheme:'red'});
+  const read=()=>{
+    const native=parse(localStorage.getItem('tw:theme'),{});
+    const saved=parse(localStorage.getItem(KEY),{});
+    return {mode:saved.mode||native.gui||'light',accentTheme:saved.accentTheme||native.accent||'red'};
+  };
   const apply=()=>{
     const p=read(),light=p.mode==='light',colors=palettes[p.accentTheme]||palettes.red;
     const root=document.documentElement;
@@ -12,7 +16,15 @@
     Object.entries({...vars,'--mirror-accent':colors[0],'--mirror-accent-hover':colors[1]}).forEach(([k,v])=>root.style.setProperty(k,v));
     root.style.colorScheme=p.mode;
   };
-  const save=change=>{const p={...read(),...change};localStorage.setItem(KEY,JSON.stringify(p));apply();sync();};
+  const save=change=>{
+    const p={...read(),...change};
+    localStorage.setItem(KEY,JSON.stringify(p));
+    const native=parse(localStorage.getItem('tw:theme'),{});
+    native.gui=p.mode;
+    native.accent=p.accentTheme;
+    localStorage.setItem('tw:theme',JSON.stringify(native));
+    apply();sync();
+  };
   const el=(tag,cls,txt)=>{const n=document.createElement(tag);if(cls)n.className=cls;if(txt!==undefined)n.textContent=txt;return n;};
   const button=(text,action,cls='mirror-menu-option')=>{const b=el('button',cls,text);b.type='button';b.addEventListener('click',action);return b;};
   const menu=(id,label,iconText)=>{
