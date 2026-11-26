@@ -22,7 +22,8 @@ jobs:
     - name: Checkout scratch-gui
       uses: actions/checkout@v4
       with:
-        repository: TurboWarp/scratch-gui
+        repository: 20250199-tomohiro/Project-TurboWarp-gui
+        ref: develop
         path: scratch-gui
         persist-credentials: false
     - name: Install Node.js
