@@ -18,7 +18,7 @@ if (SESSION_SECRET.length < 32) {
   process.exit(1);
 }
 const ADMIN_PATH = process.env.ADMIN_PATH || 'admin';
-const RESERVED_PATHS = ['login', 'logout', 'search', 'search-api', 'search-thumb', 'player', 'static', 'js', 'extensions', 'my', 'me', 'editor', 'logo'];
+const RESERVED_PATHS = ['login', 'logout', 'search', 'search-api', 'search-thumb', 'player', 'static', 'js', 'extensions', 'my', 'me', 'editor', 'logo', 'feedback'];
 if (!/^[A-Za-z0-9_-]{1,64}$/.test(ADMIN_PATH) || RESERVED_PATHS.includes(ADMIN_PATH)) {
   console.error('ADMIN_PATH は半角英数字・_・- の1〜64文字で、他のページ名と重ならない値にしてください');
   process.exit(1);
@@ -79,6 +79,16 @@ const initDb = async () => {
     updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
   await q('CREATE INDEX IF NOT EXISTS projects_account ON projects (account_id)');
+  await q(`CREATE TABLE IF NOT EXISTS feedback (
+    id SERIAL PRIMARY KEY,
+    account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+    username TEXT NOT NULL,
+    category TEXT NOT NULL,
+    message TEXT NOT NULL,
+    is_read BOOLEAN NOT NULL DEFAULT FALSE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await q('CREATE INDEX IF NOT EXISTS feedback_created ON feedback (created_at DESC)');
 };
 
 const cleanupLogs = async () => {
@@ -508,6 +518,38 @@ admin.get('/api/logs', async (req, res) => {
   res.json(rows);
 });
 
+// ---- 管理画面: フィードバックの確認 ----
+admin.get('/api/feedback', async (req, res) => {
+  const limit = Math.min(Math.max(Number.parseInt(req.query.limit, 10) || 50, 1), 200);
+  const offset = Math.max(Number.parseInt(req.query.offset, 10) || 0, 0);
+  const unreadOnly = req.query.status === 'unread';
+  const { rows } = await q(
+    `SELECT id, username, category, message, is_read, created_at FROM feedback
+     ${unreadOnly ? 'WHERE is_read = FALSE' : ''}
+     ORDER BY id DESC LIMIT $1::int OFFSET $2::int`,
+    [limit, offset]
+  );
+  const counts = await q('SELECT count(*) FILTER (WHERE is_read = FALSE)::int AS unread, count(*)::int AS total FROM feedback');
+  res.json({ unread: counts.rows[0].unread, total: counts.rows[0].total, items: rows });
+});
+
+admin.post('/api/feedback/:id/read', async (req, res) => {
+  const id = parseId(req.params.id);
+  const read = req.body ? req.body.read : undefined;
+  if (!id || typeof read !== 'boolean') return res.status(400).json({ error: 'bad_request', message: '指定が正しくありません' });
+  const { rows } = await q('UPDATE feedback SET is_read = $2::boolean WHERE id = $1::int RETURNING id', [id, read]);
+  if (!rows[0]) return res.status(404).json({ error: 'not_found', message: 'フィードバックが見つかりません' });
+  return res.json({ ok: true });
+});
+
+admin.delete('/api/feedback/:id', async (req, res) => {
+  const id = parseId(req.params.id);
+  if (!id) return res.status(400).json({ error: 'bad_request', message: '指定が正しくありません' });
+  const { rows } = await q('DELETE FROM feedback WHERE id = $1::int RETURNING id', [id]);
+  if (!rows[0]) return res.status(404).json({ error: 'not_found', message: 'フィードバックが見つかりません' });
+  return res.json({ ok: true });
+});
+
 app.use('/' + ADMIN_PATH, admin);
 
 // ---- 「私の作品」を開くための、短時間だけ有効な取得URL ----
@@ -672,6 +714,43 @@ app.get('/my/api/projects/:id/file', async (req, res) => {
   res.set('Content-Disposition', "attachment; filename*=UTF-8''" + encodeURIComponent(rows[0].title) + '.sb3');
   res.type('application/octet-stream');
   return res.send(rows[0].data);
+});
+
+// ---- フィードバック(利用者から管理者へ) ----
+const FEEDBACK_CATEGORIES = { bug: '不具合の報告', request: '要望', other: 'その他' };
+const FEEDBACK_MAX_CHARS = 2000;
+const FEEDBACK_LIMIT_COUNT = 5;      // この回数まで
+const FEEDBACK_LIMIT_MINUTES = 10;   // この分数のあいだに送れる
+
+app.get('/feedback', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'feedback.html'));
+});
+
+app.post('/feedback/api', requireXhr, express.json({ limit: '16kb' }), async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const acc = getLoggedInUser(req);
+  const body = req.body || {};
+  const category = Object.prototype.hasOwnProperty.call(FEEDBACK_CATEGORIES, body.category) ? body.category : 'other';
+  const message = typeof body.message === 'string'
+    ? body.message.replace(/\r\n?/g, '\n').replace(/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f]/g, '').trim()
+    : '';
+  if (!message) return res.status(400).json({ message: '内容を入力してください' });
+  if (message.length > FEEDBACK_MAX_CHARS) {
+    return res.status(400).json({ message: '内容は' + FEEDBACK_MAX_CHARS + '文字以内にしてください' });
+  }
+  const recent = await q(
+    "SELECT count(*)::int AS n FROM feedback WHERE account_id = $1::int AND created_at > NOW() - ($2::int * INTERVAL '1 minute')",
+    [acc.id, FEEDBACK_LIMIT_MINUTES]
+  );
+  if (recent.rows[0].n >= FEEDBACK_LIMIT_COUNT) {
+    return res.status(429).json({ message: '短い時間に送れる回数を超えました。しばらくしてから、もう一度お試しください' });
+  }
+  await q(
+    'INSERT INTO feedback (account_id, username, category, message) VALUES ($1::int, $2::text, $3::text, $4::text)',
+    [acc.id, acc.username, category, message]
+  );
+  return res.json({ ok: true });
 });
 
 // ---- 検索機能 ----
