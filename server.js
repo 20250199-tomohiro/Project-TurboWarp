@@ -298,6 +298,14 @@ const app = express();
 app.set('trust proxy', 1);
 app.set('x-powered-by', false);
 
+// ---- ログイン中アカウント情報（共通ナビゲーション用） ----
+app.get('/api/account/me', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const account = getLoggedInUser(req);
+  if (!account) return res.status(401).json({ message: 'ログインしていません' });
+  return res.json({ id: account.id, username: account.username });
+});
+
 // ---- フレンド・メッセージ・共同制作 API ----
 app.use('/api/social', createSocialRouter({ express, q, getLoggedInUser, maxProjectBytes: MAX_PROJECT_BYTES }));
 
