@@ -312,7 +312,7 @@ const createSocialRouter = ({ express, q, getLoggedInUser, maxProjectBytes }) =>
     if (!room) return res.status(404).json({ message: 'ルームが見つかりません' });
     const after = Math.max(0, Number(req.query.after) || 0);
     const events = await q(`SELECT id,account_id,event_type,payload,created_at FROM collab_events
-      WHERE room_id=$1 AND id>$2 ORDER BY id ASC LIMIT 100`, [room.id, after]);
+      WHERE room_id=$1 AND id>$2 AND account_id<>$3 ORDER BY id ASC LIMIT 100`, [room.id, after, req.account.id]);
     res.json({ events: events.rows });
   }));
 
