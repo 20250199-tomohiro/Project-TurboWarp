@@ -1,0 +1,90 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>ホーム - TurboWarp</title>
+<link rel="stylesheet" href="/mirror-ui.css?v=5">
+<script src="/mirror-theme.js" defer></script>
+<style>
+.home-main{width:min(1080px,100%);margin:0 auto;padding:42px 22px 64px}
+.home-hero{padding:34px 30px;border-radius:14px;background:var(--mirror-panel);border:1px solid var(--mirror-border)}
+.home-hero h1{margin:0 0 10px;font-size:32px}
+.home-hero p{margin:0;color:var(--mirror-muted);font-size:16px}
+.home-actions{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:16px;margin-top:24px}
+.home-action{display:flex;flex-direction:column;gap:9px;min-height:148px;padding:20px;border:1px solid var(--mirror-border);border-radius:12px;background:var(--mirror-panel);color:var(--mirror-text);text-decoration:none}
+.home-action:hover{border-color:var(--mirror-accent);transform:translateY(-1px)}
+.home-action strong{font-size:18px}
+.home-action span{font-size:13px;color:var(--mirror-muted)}
+.home-action.primary{background:var(--mirror-accent);border-color:var(--mirror-accent);color:#fff}
+.home-action.primary span{color:#fff;opacity:.9}
+@media(max-width:600px){.home-main{padding:24px 14px}.home-hero{padding:24px 18px}.home-hero h1{font-size:26px}}
+</style>
+</head>
+<body>
+<header class="mirror-topbar">
+  <a class="mirror-brand" href="/" aria-label="TurboWarp ホーム">TURBOWARP</a>
+  <nav class="mirror-main-nav" aria-label="メインナビゲーション">
+    <a href="/" aria-current="page">ホーム</a><a href="/my">私の作品</a><a href="/search">作品を探す</a>
+    <a href="/friends">フレンド</a><a href="/messages">メッセージ</a>
+    <a href="/collaboration">共同制作</a><a href="/packager">パッケージ化</a>
+  </nav>
+  <div class="mirror-header-tools">
+    <details class="mirror-menu-dropdown">
+      <summary class="mirror-menu-trigger"><img class="mirror-settings-icon" src="/mirror-settings-icon.svg" alt="">設定 <span class="mirror-caret">▾</span></summary>
+      <div class="mirror-menu-pop">
+        <div class="mirror-menu-section-title">表示モード</div>
+        <button class="mirror-menu-option" type="button" data-mirror-mode="light">ライトモード</button>
+        <button class="mirror-menu-option" type="button" data-mirror-mode="dark">ダークモード</button>
+        <div class="mirror-menu-separator"></div>
+        <div class="mirror-menu-section-title">アクセントカラー</div>
+        <button class="mirror-menu-option" type="button" data-mirror-accent="red">赤</button>
+        <button class="mirror-menu-option" type="button" data-mirror-accent="purple">紫</button>
+        <button class="mirror-menu-option" type="button" data-mirror-accent="blue">青</button>
+        <button class="mirror-menu-option" type="button" data-mirror-accent="rainbow">レインボー</button>
+      </div>
+    </details>
+    <details class="mirror-menu-dropdown" id="mirror-account-menu">
+      <summary class="mirror-menu-trigger"><span id="mirror-account-label">アカウント</span> <span class="mirror-caret">▾</span></summary>
+      <div class="mirror-menu-pop" id="mirror-account-pop">
+        <div class="mirror-account-status">アカウント情報を読み込み中…</div>
+        <a class="mirror-menu-option" href="/my">私の作品</a>
+        <a class="mirror-menu-option" href="/friends">フレンド</a>
+        <a class="mirror-menu-option" href="/messages">メッセージ</a>
+        <a class="mirror-menu-option" href="/logout">ログアウト</a>
+      </div>
+    </details>
+  </div>
+</header>
+<main class="home-main">
+  <section class="home-hero">
+    <h1>TurboWarpへようこそ！</h1>
+    <p>作品を作ったり、保存した作品を開いたり、ほかのユーザーの作品を探したりできます。</p>
+  </section>
+  <section class="home-actions" aria-label="主な機能">
+    <a class="home-action primary" href="/editor.html"><strong>新しいプロジェクトを作る</strong><span>エディターを開いて、新しい作品を作成します。</span></a>
+    <a class="home-action" href="/my"><strong>私の作品</strong><span>保存したプロジェクトを確認・編集します。</span></a>
+    <a class="home-action" href="/search"><strong>作品を探す</strong><span>公開されているScratch作品を検索します。</span></a>
+    <a class="home-action" href="/friends"><strong>フレンド</strong><span>フレンドコードや申請を管理します。</span></a>
+    <a class="home-action" href="/messages"><strong>メッセージ</strong><span>フレンドとのメッセージを確認します。</span></a>
+    <a class="home-action" href="/collaboration"><strong>共同制作</strong><span>ルームを作成して一緒に作品を編集します。</span></a>
+    <a class="home-action" href="/packager"><strong>パッケージ化</strong><span>作品をHTMLなどの形式に書き出します。</span></a>
+  </section>
+</main>
+<script>
+(async()=>{
+  const label=document.getElementById('mirror-account-label');
+  const pop=document.getElementById('mirror-account-pop');
+  try{
+    const response=await fetch('/api/account/me',{credentials:'same-origin',cache:'no-store'});
+    if(!response.ok) throw new Error('account');
+    const account=await response.json();
+    label.textContent=account.username;
+    const status=pop.querySelector('.mirror-account-status');
+    if(status) status.textContent=account.username;
+  }catch(e){label.textContent='アカウント';}
+})();
+</script>
+</body>
+</html>
