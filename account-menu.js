@@ -307,6 +307,7 @@ try {
 
     const socialLink = (text, href) => { const link = document.createElement('a'); link.className='mas-item'; link.textContent=text; link.href=href; return link; };
     menu.append(who, myLink, saveNew, saveOver, sep,
+      socialLink('フレンドコード', '/friends#my-code'),
       socialLink('フレンド管理', '/friends'),
       socialLink('メッセージ', '/messages'),
       socialLink('共同制作・ToDo', '/collaboration'),
