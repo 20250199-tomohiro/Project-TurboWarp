@@ -952,6 +952,11 @@ app.get('/mirror-ui.css', (req, res) => {
   res.type('text/css').sendFile(path.join(__dirname, 'mirror-ui.css'));
 });
 
+app.get('/mirror-theme.js', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.type('application/javascript').sendFile(path.join(__dirname, 'mirror-theme.js'));
+});
+
 // ---- ミラー本体 ----
 app.use(express.static(path.join(__dirname, 'scratch-gui/build')));
 
