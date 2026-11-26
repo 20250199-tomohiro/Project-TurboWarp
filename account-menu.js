@@ -311,6 +311,7 @@ try {
       socialLink('フレンド管理', '/friends'),
       socialLink('メッセージ', '/messages'),
       socialLink('共同制作・ToDo', '/collaboration'),
+      socialLink('パッケージ化', '/packager'),
       sep.cloneNode(), logout);
 
     const setOpen = (open) => {
