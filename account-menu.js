@@ -45,11 +45,11 @@ try {
     }
     #${ID} .mas-item:hover { background: #e5e5e5; }
     #${ID} .mas-item:disabled { opacity: .6; cursor: default; }
-    #${ID} .mas-logout { background: #4c97ff; color: #fff; }
+    #${ID} .mas-logout { background: #FF4C4C; color: #fff; }
     #${ID} .mas-logout:hover { filter: brightness(0.92); }
     #${ID} .mas-sep { height: 1px; margin: 2px 0; background: rgba(0, 0, 0, .12); }
     #mirror-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 2147483001;
-                    max-width: min(90vw, 480px); padding: 10px 16px; border-radius: 8px; background: #4c97ff; color: #fff;
+                    max-width: min(90vw, 480px); padding: 10px 16px; border-radius: 8px; background: #FF4C4C; color: #fff;
                     font: 14px system-ui, sans-serif; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
     #mirror-toast.error { background: #d94b4b; }
   `;
