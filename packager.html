@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex"><title>作品をパッケージ化</title>
+<style>
+:root{color-scheme:light dark;--bg:#f4f6fb;--card:#fff;--fg:#172033;--muted:#667085;--line:#dce2ec;--accent:#ff4c4c;--soft:#eef2f8}
+@media(prefers-color-scheme:dark){:root{--bg:#101521;--card:#1b2433;--fg:#f2f5fa;--muted:#aab4c4;--line:#344054;--soft:#263247}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font:15px/1.55 system-ui,sans-serif}
+header{padding:18px 16px 8px;text-align:center}header img{width:min(220px,60vw)}nav{display:flex;justify-content:center;gap:8px;flex-wrap:wrap;margin:10px}nav a,.btn{border:1px solid var(--line);border-radius:10px;padding:9px 13px;color:var(--fg);text-decoration:none;background:var(--card);cursor:pointer;font:inherit}
+main{width:min(900px,100%);margin:18px auto;padding:0 16px 48px}h1{font-size:26px;margin:4px 0}h2{font-size:18px;margin:0 0 12px}.lead,.muted{color:var(--muted)}.lead{margin:4px 0 20px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(250px,1fr));gap:14px}.card{background:var(--card);border:1px solid var(--line);border-radius:16px;padding:18px;margin-bottom:14px}
+label{display:block;font-weight:600;margin:12px 0 5px}input,select{font:inherit;color:var(--fg);background:var(--card);border:1px solid var(--line);border-radius:10px;padding:10px;width:100%}.checks{display:grid;grid-template-columns:repeat(auto-fit,minmax(210px,1fr));gap:8px}.check{display:flex;align-items:center;gap:9px;padding:10px;border-radius:10px;background:var(--soft);font-weight:400;margin:0}.check input{width:auto;accent-color:var(--accent)}.btn.primary{background:var(--accent);border:0;color:white;font-weight:700;width:100%;margin-top:16px}.btn:disabled{opacity:.5;cursor:wait}.status{min-height:1.5em;color:var(--muted)}.progress{height:8px;border-radius:20px;background:var(--soft);overflow:hidden}.progress>div{height:100%;width:0;background:var(--accent);transition:width .2s}.note{font-size:13px;color:var(--muted);background:var(--soft);padding:12px;border-radius:10px}.hidden{display:none!important}
+</style></head>
+<body>
+<header><a href="/"><img src="/logo.png" alt="TurboWarp"></a><nav><a href="/">トップ</a><a href="/my">私の作品</a><a href="/friends">フレンド</a><a href="/collaboration">共同制作</a></nav></header>
+<main>
+<h1>作品をパッケージ化</h1><p class="lead">保存済みのScratch作品を、HTML・ZIP・デスクトップアプリ向けに変換できます。</p>
+<section class="card">
+<h2>① パッケージ化する作品</h2>
+<label for="project">私の作品</label><select id="project"><option value="">作品を読み込み中…</option></select>
+<label for="title">出力ファイル名</label><input id="title" maxlength="60" placeholder="作品名">
+</section>
+<section class="card">
+<h2>② 出力形式</h2>
+<label for="target">形式を選択</label><select id="target">
+<optgroup label="Web向け"><option value="html">HTML（単体ファイル）</option><option value="zip-one-asset">ZIP（HTMLと作品データ）</option></optgroup>
+<optgroup label="Windows"><option value="electron-win64">Windows 64-bit（Electron）</option><option value="electron-win32">Windows 32-bit（Electron）</option><option value="electron-win-arm">Windows ARM64（Electron）</option><option value="nwjs-win64">Windows 64-bit（NW.js）</option><option value="nwjs-win32">Windows 32-bit（NW.js）</option></optgroup>
+<optgroup label="macOS"><option value="electron-mac">macOS（Electron）</option><option value="nwjs-mac">macOS（NW.js）</option><option value="webview-mac">macOS（WebView）</option></optgroup>
+<optgroup label="Linux"><option value="electron-linux64">Linux x64（Electron）</option><option value="electron-linux-arm32">Linux ARM32（Electron）</option><option value="electron-linux-arm64">Linux ARM64（Electron）</option><option value="nwjs-linux-x64">Linux x64（NW.js）</option></optgroup>
+</select>
+<p class="note" id="targetNote">HTMLはブラウザーで開ける単体ファイルです。</p>
+</section>
+<section class="card">
+<h2>③ プレイヤー設定</h2>
+<div class="grid">
+<div><label for="framerate">フレームレート</label><select id="framerate"><option>30</option><option>60</option><option>120</option><option>240</option></select></div>
+<div><label for="maxClones">クローン上限</label><select id="maxClones"><option>300</option><option>500</option><option>1000</option><option>2000</option></select></div>
+<div><label for="stageWidth">ステージ幅</label><input id="stageWidth" type="number" min="1" max="4096" value="480"></div>
+<div><label for="stageHeight">ステージ高さ</label><input id="stageHeight" type="number" min="1" max="4096" value="360"></div>
+</div>
+<label>動作オプション</label><div class="checks">
+<label class="check"><input type="checkbox" id="turbo"> ターボモード</label>
+<label class="check"><input type="checkbox" id="interpolation"> 補間</label>
+<label class="check"><input type="checkbox" id="highQualityPen"> 高品質ペン</label>
+<label class="check"><input type="checkbox" id="autoplay"> 自動再生</label>
+<label class="check"><input type="checkbox" id="fencing" checked> スプライトの画面外移動を制限</label>
+<label class="check"><input type="checkbox" id="miscLimits" checked> その他の制限を有効化</label>
+<label class="check"><input type="checkbox" id="gamepad"> ゲームパッド対応</label>
+<label class="check"><input type="checkbox" id="pointerlock"> ポインターロック対応</label>
+<label class="check"><input type="checkbox" id="greenFlag"> 緑の旗ボタン</label>
+<label class="check"><input type="checkbox" id="stopAll"> 停止ボタン</label>
+<label class="check"><input type="checkbox" id="fullscreen"> 全画面ボタン</label>
+<label class="check"><input type="checkbox" id="pause"> 一時停止ボタン</label>
+<label class="check"><input type="checkbox" id="packagedRuntime" checked> パッケージ版ランタイム</label>
+<label class="check"><input type="checkbox" id="bakeExtensions" checked> 拡張機能を組み込む</label>
+</div>
+<button id="build" class="btn primary">パッケージを作成してダウンロード</button>
+<div id="progressWrap" class="hidden" style="margin-top:14px"><div class="progress"><div id="progress"></div></div></div>
+<p id="status" class="status" role="status" aria-live="polite"></p>
+<p class="note">デスクトップアプリ向け出力では大容量の実行環境を取得するため、作成に時間がかかる場合があります。現在、同時に作成できるパッケージは1件です。</p>
+</section>
+</main>
+<script>
+(()=> {
+const $=id=>document.getElementById(id);
+const api=async(path,options={})=>{
+ const response=await fetch(path,{credentials:'same-origin',...options});
+ if(!response.ok){const data=await response.json().catch(()=>({}));throw new Error(data.message||'通信に失敗しました');}
+ return response;
+};
+const status=message=>$('status').textContent=message;
+const bool=id=>$(id).checked;
+async function loadProjects(){
+ const response=await api('/my/api/projects');const data=await response.json();const select=$('project');
+ select.replaceChildren(new Option('作品を選択してください',''));
+ (data.projects||[]).forEach(project=>select.add(new Option(project.title+'（'+project.size+' bytes）',project.id)));
+ if(!data.projects||!data.projects.length)status('「私の作品」に保存された作品がありません。先に作品を保存してください。');
+}
+$('project').addEventListener('change',()=>{
+ const option=$('project').selectedOptions[0];if(option&&option.value)$('title').value=option.textContent.replace(/（.*$/,'');
+});
+$('target').addEventListener('change',()=>{
+ const t=$('target').value;
+ $('targetNote').textContent=t==='html'?'HTMLはブラウザーで開ける単体ファイルです。':t==='zip-one-asset'?'ZIPにはHTMLプレイヤーと作品データが含まれます。':'デスクトップアプリ一式をZIPで出力します。対象OS向けの大容量ファイルをダウンロードします。';
+});
+$('build').addEventListener('click',async()=>{
+ const projectId=Number($('project').value);if(!projectId)return status('作品を選択してください。');
+ const button=$('build');button.disabled=true;$('progressWrap').classList.remove('hidden');$('progress').style.width='8%';status('作品を読み込んでいます…');
+ const options={
+ title:$('title').value,framerate:Number($('framerate').value),maxClones:Number($('maxClones').value),
+ stageWidth:Number($('stageWidth').value),stageHeight:Number($('stageHeight').value),
+ turbo:bool('turbo'),interpolation:bool('interpolation'),highQualityPen:bool('highQualityPen'),
+ autoplay:bool('autoplay'),fencing:bool('fencing'),miscLimits:bool('miscLimits'),
+ packagedRuntime:bool('packagedRuntime'),bakeExtensions:bool('bakeExtensions'),
+ chunks:{gamepad:bool('gamepad'),pointerlock:bool('pointerlock')},
+ controls:{greenFlag:bool('greenFlag'),stopAll:bool('stopAll'),fullscreen:bool('fullscreen'),pause:bool('pause')}
+ };
+ try{
+  $('progress').style.width='25%';status('パッケージを作成しています。出力形式によって数分かかることがあります…');
+  const response=await api('/packager/api/build',{method:'POST',headers:{'Content-Type':'application/json','X-Mirror':'1'},body:JSON.stringify({projectId,target:$('target').value,options})});
+  $('progress').style.width='90%';const blob=await response.blob();
+  const disposition=response.headers.get('Content-Disposition')||'';const match=disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  const filename=match?decodeURIComponent(match[1]):(($('title').value||'project')+($('target').value==='html'?'.html':'.zip'));
+  const url=URL.createObjectURL(blob);const link=document.createElement('a');link.href=url;link.download=filename;document.body.append(link);link.click();link.remove();URL.revokeObjectURL(url);
+  $('progress').style.width='100%';status('完成しました。ファイルをダウンロードしました。');
+ }catch(error){status(error.message);$('progress').style.width='0%';}
+ finally{button.disabled=false;}
+});
+loadProjects().catch(error=>status(error.message));
+})();
+</script>
+</body></html>
