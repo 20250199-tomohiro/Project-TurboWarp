@@ -23,7 +23,7 @@ try {
   style.textContent = `
     #${ID} { position: relative; display: flex; align-items: center; align-self: stretch;
              flex: 0 0 auto; margin-left: auto; margin-right: 8px; z-index: 1000;
-             font-family: system-ui, sans-serif; font-size: 14px; }
+             font-family: "Helvetica Neue", Helvetica, Arial, sans-serif; font-size: 13px; }
     #${ID}.mas-fixed { position: fixed; top: 0; right: 0; height: 48px; margin: 0;
                        z-index: 2147483000; background: rgba(0, 0, 0, .45); }
     #${ID} .mas-name { display: inline-flex; align-items: center; gap: 6px; max-width: 220px;
@@ -32,26 +32,26 @@ try {
     #${ID} .mas-name:hover, #${ID} .mas-name[aria-expanded="true"] { background: rgba(255, 255, 255, .18); }
     #${ID} .mas-label { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     #${ID} .mas-menu { position: absolute; top: calc(100% + 4px); right: 0; min-width: 240px; padding: 10px;
-                       border-radius: 8px; background: #fff; color: #111; display: flex; flex-direction: column; gap: 6px;
-                       border: 1px solid rgba(0, 0, 0, .15); box-shadow: 0 6px 20px rgba(0, 0, 0, .3); }
+                       border-radius: 6px; background: #fff; color: #575e75; display: flex; flex-direction: column; gap: 6px;
+                       border: 1px solid #e5e5e5; box-shadow: 0 4px 12px rgba(0, 0, 0, .18); }
     #${ID} .mas-menu[hidden] { display: none; }
     #${ID} .mas-who { margin-bottom: 2px; font-size: 12px; color: #555; word-break: break-all; }
     #${ID} .mas-item, #${ID} .mas-logout { display: block; box-sizing: border-box; width: 100%; padding: 8px 12px;
                          border-radius: 6px; border: 0; font: inherit; font-weight: 700; text-align: center;
                          text-decoration: none; cursor: pointer; }
-    #${ID} .mas-item { background: #eceff3; color: #111; }
+    #${ID} .mas-item { background: #f2f2f2; color: #575e75; }
     #${ID} .mas-item[hidden] {
         display: none !important;
     }
-    #${ID} .mas-item:hover { background: #dde2e9; }
+    #${ID} .mas-item:hover { background: #e5e5e5; }
     #${ID} .mas-item:disabled { opacity: .6; cursor: default; }
-    #${ID} .mas-logout { background: #FF4C4C; color: #fff; }
+    #${ID} .mas-logout { background: #4c97ff; color: #fff; }
     #${ID} .mas-logout:hover { filter: brightness(0.92); }
     #${ID} .mas-sep { height: 1px; margin: 2px 0; background: rgba(0, 0, 0, .12); }
     #mirror-toast { position: fixed; left: 50%; bottom: 24px; transform: translateX(-50%); z-index: 2147483001;
-                    max-width: min(90vw, 480px); padding: 10px 16px; border-radius: 8px; background: #222; color: #fff;
+                    max-width: min(90vw, 480px); padding: 10px 16px; border-radius: 8px; background: #4c97ff; color: #fff;
                     font: 14px system-ui, sans-serif; box-shadow: 0 4px 16px rgba(0, 0, 0, .4); }
-    #mirror-toast.error { background: #b00020; }
+    #mirror-toast.error { background: #d94b4b; }
   `;
   document.head.append(style);
 
