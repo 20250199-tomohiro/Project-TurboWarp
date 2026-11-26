@@ -4,20 +4,21 @@
  */
 :root {
   /* Follow the active TurboWarp theme; red is the fallback theme accent. */
-  --mirror-blue: var(--ui-primary, #FF4C4C);
-  --mirror-blue-hover: var(--ui-primary-hover, var(--ui-primary, #e04444));
-  --mirror-header: var(--menu-bar-background, var(--ui-primary, #FF4C4C));
+  --mirror-blue: var(--looks-secondary, var(--accent, #FF4C4C));
+  --mirror-blue-hover: var(--looks-secondary-dark, var(--accent-hover, #e04444));
+  --mirror-header: var(--menu-bar-background, var(--looks-secondary, var(--accent, #FF4C4C)));
   --mirror-header-text: var(--menu-bar-foreground, #ffffff);
   --mirror-green: #4caf50;
   --mirror-red: #e64b4b;
-  --mirror-page: var(--page-background, #f9f9f9);
-  --mirror-panel: var(--popover-background, var(--page-background, #ffffff));
-  --mirror-text: var(--page-foreground, #575e75);
-  --mirror-muted: #858b9e;
-  --mirror-border: #e5e5e5;
-  --mirror-input: var(--input-background, var(--page-background, #ffffff));
+  --mirror-page: var(--page-background, var(--bg, #f9f9f9));
+  --mirror-panel: var(--popover-background, var(--card, #ffffff));
+  --mirror-text: var(--page-foreground, var(--fg, #575e75));
+  --mirror-muted: var(--text-primary-transparent, var(--muted, #858b9e));
+  --mirror-border: var(--ui-black-transparent, var(--line, #e5e5e5));
+  --mirror-soft: var(--ui-primary, var(--soft, #f2f2f2));
+  --mirror-input: var(--input-background, var(--card, #ffffff));
   --mirror-shadow: 0 2px 5px rgba(0,0,0,.12);
-  color-scheme: light;
+  color-scheme: light dark;
 }
 * { box-sizing: border-box; }
 html { min-height: 100%; background: var(--mirror-page); }
@@ -86,7 +87,7 @@ main {
 }
 h1 {
   margin: 0 0 4px !important;
-  color: #575e75;
+  color: var(--mirror-text);
   font-size: 24px !important;
   line-height: 1.25;
   font-weight: 700;
@@ -110,7 +111,7 @@ p { line-height: 1.5; }
 input, select, textarea {
   min-height: 36px;
   padding: 7px 10px !important;
-  border: 1px solid #c6c6c6 !important;
+  border: 1px solid var(--mirror-border) !important;
   border-radius: 4px !important;
   background: var(--input-background, var(--mirror-panel)) !important;
   color: var(--mirror-text) !important;
@@ -135,7 +136,7 @@ button, .btn, a.btn {
   transition: background .12s ease, border-color .12s ease, transform .08s ease;
 }
 button:hover, .btn:hover, a.btn:hover {
-  background: #f2f2f2 !important;
+  background: var(--mirror-soft) !important;
   border-color: #aaa !important;
 }
 button:active, .btn:active { transform: translateY(1px); }
@@ -156,15 +157,15 @@ button.primary:hover, .btn.primary:hover, .primary:hover {
 .muted, .meta, .count { color: var(--mirror-muted) !important; }
 .status { color: var(--mirror-muted) !important; }
 .list .item, .item {
-  border: 1px solid #e8e8e8;
+  border: 1px solid var(--mirror-border);
   border-radius: 6px !important;
-  background: #fafafa !important;
+  background: var(--mirror-soft) !important;
   color: var(--mirror-text);
 }
 .code {
-  border: 1px dashed #c6c6c6;
+  border: 1px dashed var(--mirror-border);
   border-radius: 6px !important;
-  background: #f5f5f5 !important;
+  background: var(--mirror-soft) !important;
   color: #575e75;
 }
 .check { border: 1px solid #e8e8e8; border-radius: 5px !important; background: #fafafa !important; }
@@ -186,18 +187,18 @@ a:hover { color: var(--mirror-blue-hover); }
     --mirror-text: var(--page-foreground, #e5e5e5);
     --mirror-input: var(--input-background, #1e2127);
   }
-  html, body { background: #181a1f !important; color: #e5e5e5 !important; }
+  html, body { background: var(--mirror-page) !important; color: var(--mirror-text) !important; }
   body > header { background: var(--mirror-header); }
-  h1, h2 { color: #f1f1f1; }
-  .card, section.card { background: var(--popover-background, #24272e) !important; border-color: #3a3e47 !important; }
-  input, select, textarea { background: var(--input-background, #1e2127) !important; border-color: #555b66 !important; color: var(--mirror-text) !important; }
-  button, .btn, a.btn { background: #30343b !important; border-color: #555b66 !important; color: #f1f1f1 !important; }
+  h1, h2 { color: var(--mirror-text); }
+  .card, section.card { background: var(--mirror-panel) !important; border-color: var(--mirror-border) !important; }
+  input, select, textarea { background: var(--mirror-input) !important; border-color: var(--mirror-border) !important; color: var(--mirror-text) !important; }
+  button, .btn, a.btn { background: var(--mirror-panel) !important; border-color: var(--mirror-border) !important; color: var(--mirror-text) !important; }
   button.primary, .btn.primary, .primary { background: var(--mirror-blue) !important; color: #fff !important; }
-  .item, .list .item, .check, .note { background: #1e2127 !important; border-color: #3a3e47 !important; color: #e5e5e5 !important; }
-  .chat { background: #1e2127 !important; border-color: #3a3e47; }
-  .bubble { background: #30343b !important; color: #f1f1f1 !important; border-color: #555b66; }
+  .item, .list .item, .check, .note { background: var(--mirror-soft) !important; border-color: var(--mirror-border) !important; color: var(--mirror-text) !important; }
+  .chat { background: var(--mirror-soft) !important; border-color: var(--mirror-border); }
+  .bubble { background: var(--mirror-panel) !important; color: var(--mirror-text) !important; border-color: var(--mirror-border); }
   .bubble.mine { background: var(--mirror-blue) !important; color: #fff !important; }
-  .code { background: #30343b !important; color: #fff; border-color: #555b66; }
+  .code { background: var(--mirror-soft) !important; color: var(--mirror-text); border-color: var(--mirror-border); }
 }
 @media (max-width: 680px) {
   body > header { align-items: flex-start !important; flex-direction: column !important; gap: 4px !important; padding: 8px 12px !important; }
