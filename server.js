@@ -19,7 +19,7 @@ if (SESSION_SECRET.length < 32) {
   process.exit(1);
 }
 const ADMIN_PATH = process.env.ADMIN_PATH || 'admin';
-const RESERVED_PATHS = ['login', 'logout', 'search', 'search-api', 'search-thumb', 'player', 'static', 'js', 'extensions', 'my', 'me', 'editor', 'logo', 'feedback'];
+const RESERVED_PATHS = ['login', 'logout', 'search', 'search-api', 'search-thumb', 'player', 'static', 'js', 'extensions', 'my', 'me', 'editor', 'logo', 'feedback', 'friends', 'messages', 'collaboration'];
 if (!/^[A-Za-z0-9_-]{1,64}$/.test(ADMIN_PATH) || RESERVED_PATHS.includes(ADMIN_PATH)) {
   console.error('ADMIN_PATH は半角英数字・_・- の1〜64文字で、他のページ名と重ならない値にしてください');
   process.exit(1);
