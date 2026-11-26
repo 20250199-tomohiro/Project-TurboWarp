@@ -595,17 +595,17 @@ app.get('/my/dl/:id/:token/project.sb3', async (req, res) => {
   return res.send(rows[0].data);
 });
 
+// ---- 専用ホームページ ----
+app.get('/', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'home.html'));
+});
+
 // ---- ここから先は、ログインした利用者だけが見られる ----
 app.use((req, res, next) => {
   if (getLoggedInUser(req)) return next();
   res.set('Cache-Control', 'no-store');
   return res.status(401).type('html').send(loginPage());
-});
-
-// ---- 専用ホームページ ----
-app.get('/', (req, res) => {
-  res.set('Cache-Control', 'no-store');
-  res.sendFile(path.join(__dirname, 'home.html'));
 });
 
 // ---- フレンド・メッセージ・共同制作の専用ページ ----
