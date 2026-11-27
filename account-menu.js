@@ -3,7 +3,7 @@
   if (window.__accountMenuLoaded) return;
   window.__accountMenuLoaded = true;
 
-  const ID = 'mirror-account-menu';
+  const ID = 'mirror-shared-account-menu';
   let username = '';
   let profileCache = null;
   let projects = [];
@@ -25,7 +25,7 @@ try {
     #${ID} { position:absolute; top:0; right:8px; display:flex; align-items:center;
       height:48px; z-index:1000; margin:0; font:13px "Helvetica Neue",Helvetica,Arial,sans-serif; }
     #${ID}.mas-fixed { position:fixed; top:0; right:0; height:48px; z-index:2147483000; background:transparent; }
-    #${ID}.mas-site-menu { position:relative; top:auto; right:auto; height:48px; z-index:2147483000; margin-left:8px; flex:0 0 auto; }
+    #${ID}.mas-site-menu { position:relative; top:auto; right:auto; height:48px; z-index:2147483000; margin-left:auto; flex:0 0 auto; }
     #${ID} .mas-menu { z-index:2147483001; }
     #${ID} .mas-name { display:inline-flex; align-items:center; gap:9px; max-width:260px;
       height:40px; padding:0 12px 0 8px; border:0; border-radius:7px;
