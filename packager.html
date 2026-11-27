@@ -19,8 +19,7 @@ label{display:block;font-weight:600;margin:12px 0 5px}input,select{font:inherit;
     <a class="mirror-new-project" href="/editor.html"><span aria-hidden="true">＋</span> 新規作成</a>
     <a href="/">ホーム</a><a href="/my">私の作品</a><a href="/search">作品を探す</a>
     <a href="/friends">フレンド</a><a href="/messages">メッセージ</a>
-    <a href="/collaboration">共同制作</a><a href="/packager">パッケージ化</a>
-  <a href="/account">アカウント</a></nav>
+    <a href="/collaboration">共同制作</a><a href="/packager">パッケージ化</a></nav>
 </header>
 <main>
 <h1>作品をパッケージ化</h1><p class="lead">保存済みのScratch作品を、HTML・ZIP・デスクトップアプリ向けに変換できます。</p>
@@ -118,4 +117,5 @@ $('build').addEventListener('click',async()=>{
 loadProjects().catch(error=>status(error.message));
 })();
 </script>
+<script src="/account-menu.js?v=shared-profile-menu" defer></script>
 </body></html>
