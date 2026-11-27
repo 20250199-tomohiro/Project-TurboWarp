@@ -57,7 +57,30 @@ const initDb = async () => {
     enabled BOOLEAN NOT NULL DEFAULT TRUE,
     ver INTEGER NOT NULL DEFAULT 1,
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-    last_login TIMESTAMPTZ
+    last_login TIMESTAMPTZ,
+    scratch_username TEXT,
+    bio TEXT NOT NULL DEFAULT '',
+    avatar BYTEA,
+    avatar_mime TEXT
+  )`);
+  await q('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS scratch_username TEXT');
+  await q("ALTER TABLE accounts ADD COLUMN IF NOT EXISTS bio TEXT NOT NULL DEFAULT ''");
+  await q('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS avatar BYTEA');
+  await q('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS avatar_mime TEXT');
+  await q('CREATE UNIQUE INDEX IF NOT EXISTS accounts_scratch_username_lower ON accounts (lower(scratch_username)) WHERE scratch_username IS NOT NULL');
+  await q(`CREATE TABLE IF NOT EXISTS scratch_auth_states (
+    state TEXT PRIMARY KEY,
+    mode TEXT NOT NULL CHECK (mode IN ('login','link')),
+    account_id INTEGER REFERENCES accounts(id) ON DELETE CASCADE,
+    redirect_uri TEXT NOT NULL,
+    expires_at TIMESTAMPTZ NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+  )`);
+  await q(`CREATE TABLE IF NOT EXISTS friendships (
+    account_low INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    account_high INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    PRIMARY KEY(account_low,account_high), CHECK(account_low < account_high)
   )`);
   await q('CREATE UNIQUE INDEX IF NOT EXISTS accounts_username_lower ON accounts (lower(username))');
   await q(`CREATE TABLE IF NOT EXISTS logs (
@@ -249,6 +272,7 @@ const loginPage = (message = '') => `<!doctype html>
   input:focus { outline: 2px solid var(--accent); border-color: var(--accent); }
   button { margin-top: 16px; border: 0; background: var(--accent); color: #fff; font-weight: 700; cursor: pointer; }
   button:hover { filter: brightness(0.92); }
+  .scratch-login { display:block; margin-top:12px; padding:11px; text-align:center; border-radius:8px; background:#4c97ff; color:white; text-decoration:none; font-weight:700; }
   button:disabled { opacity: .6; cursor: default; }
   #msg { min-height: 1.5em; margin: 12px 0 0; color: #b00020; font-size: 14px; }
   .note { margin: 8px 0 0; font-size: 13px; text-align: center; opacity: .85; }
@@ -263,6 +287,7 @@ const loginPage = (message = '') => `<!doctype html>
   <label for="p">パスワード</label>
   <input id="p" type="password" name="password" required maxlength="256" autocomplete="current-password">
   <button id="b" type="submit">ログイン</button>
+  <a class="scratch-login" href="/auth/scratch/start?mode=login">Sign in with Scratch</a>
   <p id="msg">${message}</p>
   <p class="note">アカウントをお持ちではないですか?管理者に連絡してください!</p>
 </form>
@@ -313,6 +338,80 @@ app.use('/api/social', createSocialRouter({ express, q, getLoggedInUser, maxProj
 app.get('/logo.png', (req, res) => {
   res.set('Cache-Control', 'public, max-age=86400');
   res.sendFile(path.join(__dirname, 'logo.png'));
+});
+
+
+// ---- Scratch Auth: 本人確認と既存アカウントへの紐付け ----
+const scratchBaseUrl = 'https://auth.itinerary.eu.org';
+const publicBaseUrl = String(process.env.PUBLIC_BASE_URL || '').replace(/\/$/, '');
+const escapeHtml = (value) => String(value).replace(/[&<>"']/g, (c) => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const scratchResultPage = (message, success = false) => `<!doctype html><html lang="ja"><meta charset="utf-8"><meta name="viewport" content="width=device-width"><title>Scratch連携</title><body style="font-family:system-ui;max-width:560px;margin:12vh auto;padding:24px;text-align:center"><h1>${success ? 'Scratch連携完了' : 'Scratch連携エラー'}</h1><p>${escapeHtml(message)}</p><p><a href="/account">アカウントページへ</a> ・ <a href="/">ホームへ</a></p></body></html>`;
+
+app.get('/auth/scratch/start', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  if (!publicBaseUrl || !/^https:\/\//i.test(publicBaseUrl)) {
+    return res.status(503).type('html').send(scratchResultPage('認証用のPUBLIC_BASE_URLがサーバーに設定されていません。管理者に連絡してください。'));
+  }
+  const mode = req.query.mode === 'link' ? 'link' : 'login';
+  const account = getLoggedInUser(req);
+  if (mode === 'link' && !account) return res.status(401).redirect('/login');
+  const state = crypto.randomBytes(32).toString('hex');
+  const redirectUri = publicBaseUrl + '/auth/scratch/callback?state=' + state;
+  await q('INSERT INTO scratch_auth_states(state,mode,account_id,redirect_uri,expires_at) VALUES($1,$2,$3,$4,NOW()+INTERVAL \'10 minutes\')',
+    [state, mode, mode === 'link' ? account.id : null, redirectUri]);
+  const redirect = Buffer.from(redirectUri, 'utf8').toString('base64');
+  const authUrl = scratchBaseUrl + '/auth/?' + new URLSearchParams({ redirect, name: 'Project-TurboWarp' }).toString();
+  return res.redirect(302, authUrl);
+});
+
+app.get('/auth/scratch/callback', async (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  const state = typeof req.query.state === 'string' ? req.query.state : '';
+  const privateCode = typeof req.query.privateCode === 'string' ? req.query.privateCode : '';
+  if (!/^[a-f0-9]{64}$/.test(state) || !privateCode || privateCode.length > 512) {
+    return res.status(400).type('html').send(scratchResultPage('認証情報が不足しています。最初からやり直してください。'));
+  }
+  const found = await q('DELETE FROM scratch_auth_states WHERE state=$1 AND expires_at>NOW() RETURNING mode,account_id,redirect_uri', [state]);
+  const authState = found.rows[0];
+  if (!authState) return res.status(403).type('html').send(scratchResultPage('認証の有効期限が切れたか、無効なリクエストです。'));
+  try {
+    const verifyUrl = scratchBaseUrl + '/api/auth/verifyToken?' + new URLSearchParams({ privateCode });
+    const upstream = await fetch(verifyUrl, { headers: { Accept: 'application/json' }, signal: AbortSignal.timeout(10000) });
+    if (!upstream.ok) throw new Error('verification_failed');
+    const verified = await upstream.json();
+    if (verified.valid !== true || verified.redirect !== authState.redirect_uri ||
+        typeof verified.username !== 'string' || !/^[A-Za-z0-9_-]{1,20}$/.test(verified.username)) {
+      return res.status(403).type('html').send(scratchResultPage('Scratchアカウントの本人確認に失敗しました。'));
+    }
+    const scratchUsername = verified.username;
+    if (authState.mode === 'link') {
+      const current = getLoggedInUser(req);
+      if (!current || current.id !== authState.account_id) {
+        return res.status(403).type('html').send(scratchResultPage('連携を開始したProject-TurboWarpアカウントと一致しません。ログインし直してください。'));
+      }
+      const linked = await q('UPDATE accounts SET scratch_username=$1 WHERE id=$2 AND (scratch_username IS NULL OR lower(scratch_username)=lower($1)) RETURNING id',
+        [scratchUsername, current.id]);
+      if (!linked.rows[0]) return res.status(409).type('html').send(scratchResultPage('このScratchアカウントは別のProject-TurboWarpアカウントに連携済みです。'));
+      await logEvent(current.username, 'scratch_linked', req, scratchUsername);
+      return res.type('html').send(scratchResultPage('Scratchアカウント「' + scratchUsername + '」を連携しました。', true));
+    }
+    const match = await q('SELECT id,username,enabled,ver FROM accounts WHERE lower(scratch_username)=lower($1)', [scratchUsername]);
+    const acc = match.rows[0];
+    if (!acc) {
+      await logEvent(scratchUsername, 'scratch_login_unlinked', req);
+      return res.status(403).type('html').send(scratchResultPage('このScratchアカウントはProject-TurboWarpのアカウントに連携されていません。先に既存アカウントへログインし、アカウントページから連携してください。'));
+    }
+    if (!acc.enabled) return res.status(403).type('html').send(scratchResultPage('このProject-TurboWarpアカウントは無効になっています。'));
+    await q('UPDATE accounts SET last_login=NOW() WHERE id=$1', [acc.id]);
+    await logEvent(acc.username, 'scratch_login_success', req, scratchUsername);
+    res.cookie(USER_COOKIE, makeUserToken(acc.id, acc.ver), {
+      httpOnly: true, secure: req.secure, sameSite: 'lax', maxAge: USER_MAX_AGE_MS, path: '/'
+    });
+    return res.redirect(302, '/');
+  } catch (err) {
+    console.error('Scratch Auth verification failed:', err.message);
+    return res.status(502).type('html').send(scratchResultPage('Scratch Authの認証確認サービスに接続できませんでした。時間をおいて再度お試しください。'));
+  }
 });
 
 // ---- 利用者のログイン / ログアウト ----
@@ -606,6 +705,64 @@ app.use((req, res, next) => {
   if (getLoggedInUser(req)) return next();
   res.set('Cache-Control', 'no-store');
   return res.status(401).type('html').send(loginPage());
+});
+
+
+// ---- アカウントプロフィール ----
+const requireProfileWrite = (req, res, next) => {
+  if (req.get('X-Mirror') !== '1') return res.status(403).json({ message: '許可されていない操作です' });
+  next();
+};
+app.get('/account', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
+app.get('/profile/:id', (req, res) => res.sendFile(path.join(__dirname, 'profile.html')));
+app.get('/api/profile/me', async (req, res) => {
+  const acc = getLoggedInUser(req);
+  if (!acc) return res.status(401).json({ message: 'ログインしてください' });
+  const result = await q('SELECT id,username,scratch_username,bio,(avatar IS NOT NULL) AS has_avatar FROM accounts WHERE id=$1', [acc.id]);
+  res.json(result.rows[0]);
+});
+app.patch('/api/profile/me', requireProfileWrite, express.json({limit:'8kb'}), async (req,res) => {
+  const acc = getLoggedInUser(req);
+  if (!acc) return res.status(401).json({message:'ログインしてください'});
+  const bio = typeof req.body.bio === 'string' ? req.body.bio.trim().slice(0,1000) : null;
+  if (bio === null) return res.status(400).json({message:'自己紹介を入力してください'});
+  await q('UPDATE accounts SET bio=$1 WHERE id=$2',[bio,acc.id]);
+  res.json({ok:true});
+});
+app.post('/api/profile/avatar', requireProfileWrite, express.raw({type:['image/png','image/jpeg','image/webp'],limit:'2mb'}), async (req,res) => {
+  const acc = getLoggedInUser(req);
+  if (!acc) return res.status(401).json({message:'ログインしてください'});
+  const mime = req.get('Content-Type');
+  if (!Buffer.isBuffer(req.body) || !req.body.length) return res.status(400).json({message:'画像ファイルを選択してください'});
+  const valid = (mime==='image/png' && req.body.subarray(0,8).equals(Buffer.from([137,80,78,71,13,10,26,10]))) ||
+    (mime==='image/jpeg' && req.body[0]===0xff && req.body[1]===0xd8 && req.body[2]===0xff) ||
+    (mime==='image/webp' && req.body.toString('ascii',0,4)==='RIFF' && req.body.toString('ascii',8,12)==='WEBP');
+  if (!valid) return res.status(400).json({message:'PNG・JPEG・WebP画像を選択してください'});
+  await q('UPDATE accounts SET avatar=$1,avatar_mime=$2 WHERE id=$3',[req.body,mime,acc.id]);
+  res.json({ok:true});
+});
+app.get('/api/profile/:id/avatar', async (req,res) => {
+  const id=parseId(req.params.id);
+  if(!id) return res.status(400).end();
+  const result=await q('SELECT avatar,avatar_mime FROM accounts WHERE id=$1',[id]);
+  if(!result.rows[0] || !result.rows[0].avatar) return res.status(404).end();
+  res.set('Cache-Control','private, max-age=300');
+  res.type(result.rows[0].avatar_mime || 'application/octet-stream').send(result.rows[0].avatar);
+});
+app.get('/api/profile/:id', async (req,res) => {
+  const viewer=getLoggedInUser(req), id=parseId(req.params.id);
+  if(!viewer) return res.status(401).json({message:'ログインしてください'});
+  if(!id) return res.status(400).json({message:'プロフィールIDが不正です'});
+  let allowed=viewer.id===id;
+  if(!allowed){
+    const [low,high]=[Math.min(viewer.id,id),Math.max(viewer.id,id)];
+    const friendship=await q('SELECT 1 FROM friendships WHERE account_low=$1 AND account_high=$2',[low,high]);
+    allowed=friendship.rowCount>0;
+  }
+  if(!allowed) return res.status(403).json({message:'このプロフィールはフレンドのみ閲覧できます'});
+  const result=await q('SELECT id,username,scratch_username,bio,(avatar IS NOT NULL) AS has_avatar FROM accounts WHERE id=$1 AND enabled=TRUE',[id]);
+  if(!result.rows[0]) return res.status(404).json({message:'アカウントが見つかりません'});
+  res.json(result.rows[0]);
 });
 
 // ---- フレンド・メッセージ・共同制作の専用ページ ----
