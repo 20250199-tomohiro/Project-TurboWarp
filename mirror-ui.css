@@ -217,6 +217,21 @@ body.mirror-search-page #more{display:block;margin:24px auto!important}
   outline-offset:-3px!important;
 }
 
+/* In light mode, use a white button with the selected theme accent for its label. */
+:root[data-mirror-theme="light"] .mirror-main-nav a.mirror-new-project{
+  background:#fff!important;
+  border-color:var(--mirror-accent)!important;
+  color:var(--mirror-accent)!important;
+}
+:root[data-mirror-theme="light"] .mirror-main-nav a.mirror-new-project:hover,
+:root[data-mirror-theme="light"] .mirror-main-nav a.mirror-new-project:focus-visible{
+  background:#fff!important;
+  border-color:var(--mirror-accent-hover)!important;
+  color:var(--mirror-accent-hover)!important;
+  filter:none!important;
+  outline-color:var(--mirror-accent)!important;
+}
+
 /* Keep account dropdown visually consistent with TurboWarp menu surfaces. */
 .mirror-menu-dropdown .mirror-menu-pop{
   min-width:220px!important;
