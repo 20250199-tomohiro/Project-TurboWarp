@@ -24,10 +24,14 @@ try {
     #${ID} { position:absolute; top:0; right:8px; display:flex; align-items:center;
       height:48px; z-index:1000; margin:0; font:13px "Helvetica Neue",Helvetica,Arial,sans-serif; }
     #${ID}.mas-fixed { position:fixed; top:0; right:0; height:48px; z-index:2147483000; background:transparent; }
-    #${ID} .mas-name { display:inline-flex; align-items:center; gap:8px; max-width:220px;
-      height:40px; padding:0 14px; border:0; border-radius:7px;
+    #${ID} .mas-name { display:inline-flex; align-items:center; gap:9px; max-width:260px;
+      height:40px; padding:0 12px 0 8px; border:0; border-radius:7px;
       background:var(--mirror-soft, #edf0f5); color:var(--mirror-text, #575e75);
       font:700 14px "Helvetica Neue",Helvetica,Arial,sans-serif; cursor:pointer; }
+    #${ID} .mas-avatar { display:block; flex:0 0 28px; width:28px; height:28px;
+      border-radius:50%; object-fit:cover; background:var(--mirror-border,#d9dde5);
+      border:1px solid rgba(0,0,0,.12); }
+    #${ID} .mas-label { min-width:0; }
     #${ID} .mas-name:hover, #${ID} .mas-name[aria-expanded="true"] { background:var(--mirror-border, #d9dde5); }
     #${ID} .mas-label { overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
     #${ID} .mas-caret, .mirror-caret { display:inline-block; width:0; height:0;
@@ -271,13 +275,17 @@ try {
     btn.className = 'mas-name';
     btn.setAttribute('aria-haspopup', 'true');
     btn.setAttribute('aria-expanded', 'false');
+    const avatar = document.createElement('img');
+    avatar.className = 'mas-avatar';
+    avatar.alt = '';
+    avatar.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="#d9dde5"/><circle cx="32" cy="24" r="12" fill="#87909f"/><path d="M10 60c2-13 10-20 22-20s20 7 22 20" fill="#87909f"/></svg>');
     const label = document.createElement('span');
     label.className = 'mas-label';
     label.textContent = username;
     const caret = document.createElement('span');
     caret.setAttribute('aria-hidden', 'true');
     caret.className = 'mas-caret';
-    btn.append(label, caret);
+    btn.append(avatar, label, caret);
 
     const menu = document.createElement('div');
     menu.className = 'mas-menu';
@@ -335,7 +343,7 @@ try {
     });
 
     wrap.append(btn, menu);
-    Object.assign(els, { myLink, saveNew, saveOver });
+    Object.assign(els, { myLink, saveNew, saveOver, avatar, label });
     return wrap;
   };
 
@@ -428,6 +436,14 @@ try {
         username = data.username;
         schedule();
         refreshProjects().then(updateMenu);
+        fetch('/api/profile/me', { credentials: 'same-origin', headers: { Accept: 'application/json' } })
+          .then((res) => (res.ok ? res.json() : null))
+          .then((profile) => {
+            if (!profile) return;
+            if (els.label) els.label.textContent = profile.username || username;
+            if (els.avatar && profile.has_avatar) els.avatar.src = '/api/profile/' + profile.id + '/avatar';
+          })
+          .catch(() => {});
       }
     })
     .catch(() => {});
