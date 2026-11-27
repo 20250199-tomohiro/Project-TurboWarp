@@ -765,6 +765,83 @@ app.get('/my/open/:id', async (req, res) => {
   return res.redirect('/editor.html?project_url=' + encodeURIComponent(fileUrl) + '&mirror_pid=' + id + '&mirror_source=myworks');
 });
 
+// ---- Scratch の公開プロフィールから作品を取り込み ----
+const scratchFetchJson = async (url) => {
+  const response = await fetch(url, {
+    headers: { Accept: 'application/json', 'User-Agent': 'Project-TurboWarp' },
+    signal: AbortSignal.timeout(12000)
+  });
+  if (!response.ok) {
+    const error = new Error(response.status === 404 ? 'Scratchのユーザーまたは作品が見つかりません' : 'Scratch APIへの接続に失敗しました');
+    error.status = response.status;
+    throw error;
+  }
+  return response.json();
+};
+app.get('/my/api/scratch/:username/projects', async (req, res) => {
+  const acc = getLoggedInUser(req);
+  if (!acc) return res.status(401).json({ message: 'ログインしてください' });
+  const username = String(req.params.username || '').trim();
+  if (!/^[A-Za-z0-9_-]{1,20}$/.test(username)) return res.status(400).json({ message: 'Scratchユーザー名を確認してください' });
+  try {
+    const profile = await scratchFetchJson('https://api.scratch.mit.edu/users/' + encodeURIComponent(username));
+    const projects = await scratchFetchJson('https://api.scratch.mit.edu/users/' + encodeURIComponent(username) + '/projects?limit=40&offset=0');
+    if (!Array.isArray(projects)) return res.status(502).json({ message: 'Scratchの作品一覧を取得できませんでした' });
+    return res.json({
+      username: profile.username || username,
+      projects: projects.map((p) => ({
+        id: String(p.id),
+        title: String(p.title || '名称未設定').slice(0, 120),
+        instructions: String(p.instructions || '').slice(0, 240),
+        thumbnail: 'https://uploads.scratch.mit.edu/get_image/project/' + encodeURIComponent(String(p.id)) + '_480x360.png',
+        updated: p.lastModified || null
+      }))
+    });
+  } catch (err) {
+    console.error('Scratch project list error:', err.message);
+    return res.status(err.status === 404 ? 404 : 502).json({ message: err.name === 'TimeoutError' ? 'Scratchへの接続がタイムアウトしました' : err.message || 'Scratchの作品一覧を取得できませんでした' });
+  }
+});
+app.post('/my/api/scratch/import', requireXhr, express.json({ limit: '8kb' }), async (req, res) => {
+  const acc = getLoggedInUser(req);
+  if (!acc) return res.status(401).json({ message: 'ログインしてください' });
+  const projectId = String(req.body && req.body.projectId || '');
+  if (!/^\\d{1,20}$/.test(projectId)) return res.status(400).json({ message: 'Scratchの作品IDが正しくありません' });
+  try {
+    const { rows: countRows } = await q('SELECT count(*)::int AS count FROM projects WHERE account_id=$1::int', [acc.id]);
+    if (countRows[0].count >= MAX_PROJECTS) return res.status(409).json({ message: '保存できる作品数の上限に達しています。「私の作品」で不要な作品を削除してください' });
+    const metadata = await scratchFetchJson('https://api.scratch.mit.edu/projects/' + encodeURIComponent(projectId));
+    const response = await fetch('https://projects.scratch.mit.edu/' + encodeURIComponent(projectId), {
+      headers: { Accept: 'application/json', 'User-Agent': 'Project-TurboWarp' },
+      signal: AbortSignal.timeout(15000)
+    });
+    if (!response.ok) return res.status(502).json({ message: 'Scratchのプロジェクトデータを取得できませんでした' });
+    const bytes = Buffer.from(await response.arrayBuffer());
+    if (!bytes.length || bytes.length > MAX_PROJECT_BYTES) return res.status(413).json({ message: 'この作品はサイズ上限(' + MAX_PROJECT_MB + 'MB)を超えています' });
+    let project;
+    try { project = JSON.parse(bytes.toString('utf8')); } catch (_) {
+      return res.status(422).json({ message: 'Scratchから有効なプロジェクトデータを取得できませんでした' });
+    }
+    if (!project || typeof project !== 'object' || !Array.isArray(project.targets)) {
+      return res.status(422).json({ message: 'このScratch作品のデータ形式には対応していません' });
+    }
+    const title = String(metadata.title || 'Scratch作品 ' + projectId).slice(0, 120);
+    const inserted = await q(
+      `INSERT INTO projects (account_id, title, data, size)
+       SELECT $1::int, $2, $3, $4
+       WHERE (SELECT count(*) FROM projects WHERE account_id=$1::int) < $5::int
+       RETURNING id`,
+      [acc.id, title, bytes, bytes.length, MAX_PROJECTS]
+    );
+    if (!inserted.rows.length) return res.status(409).json({ message: '保存できる作品数の上限に達しています' });
+    await logEvent(acc.username, 'scratch_project_import', req, projectId);
+    return res.json({ ok: true, id: inserted.rows[0].id, title });
+  } catch (err) {
+    console.error('Scratch project import error:', err.message);
+    return res.status(err.name === 'TimeoutError' ? 504 : 502).json({ message: err.name === 'TimeoutError' ? 'Scratchへの接続がタイムアウトしました' : err.message || 'Scratch作品の取り込みに失敗しました' });
+  }
+});
+
 app.get('/my/api/projects', async (req, res) => {
   res.set('Cache-Control', 'no-store');
   const acc = getLoggedInUser(req);
