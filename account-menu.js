@@ -25,6 +25,8 @@ try {
     #${ID} { position:absolute; top:0; right:8px; display:flex; align-items:center;
       height:48px; z-index:1000; margin:0; font:13px "Helvetica Neue",Helvetica,Arial,sans-serif; }
     #${ID}.mas-fixed { position:fixed; top:0; right:0; height:48px; z-index:2147483000; background:transparent; }
+    #${ID}.mas-site-menu { position:relative; top:auto; right:auto; height:48px; z-index:2147483000; margin-left:8px; flex:0 0 auto; }
+    #${ID} .mas-menu { z-index:2147483001; }
     #${ID} .mas-name { display:inline-flex; align-items:center; gap:9px; max-width:260px;
       height:40px; padding:0 12px 0 8px; border:0; border-radius:7px;
       background:var(--mirror-soft, #edf0f5); color:var(--mirror-text, #575e75);
@@ -326,6 +328,9 @@ try {
 
     // 機能ページへの導線は共通ナビゲーションバーに集約し、
     // アカウントメニューには重複して表示しない。
+    const editorMode = !!findMenuBar();
+    saveNew.hidden = !editorMode;
+    saveOver.hidden = !editorMode;
     menu.append(who, profileLink, myLink, saveNew, saveOver, sep, logout);
 
     const setOpen = (open) => {
@@ -379,12 +384,15 @@ try {
       updateMenu();
     }
     const bar = findMenuBar();
-    wrap.classList.toggle('mas-fixed', !bar);
-    const target = bar || document.body;
+    const siteNav = !bar ? document.querySelector('.mirror-topbar .mirror-main-nav') : null;
+    wrap.classList.toggle('mas-fixed', !bar && !siteNav);
+    wrap.classList.toggle('mas-site-menu', !!siteNav);
+    const target = bar || siteNav || document.body;
     if (bar) {
       if (getComputedStyle(bar).position === 'static') bar.style.position = 'relative';
       bar.style.paddingRight = '190px';
     }
+    if (siteNav && getComputedStyle(siteNav).position === 'static') siteNav.style.position = 'relative';
     if (wrap.parentElement !== target || target.lastElementChild !== wrap) target.append(wrap);
   };
 
