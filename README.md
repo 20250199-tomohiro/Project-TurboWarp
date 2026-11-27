@@ -21,3 +21,12 @@ The TurboWarp Packager is licensed under MPL-2.0. See the upstream [TurboWarp/pa
 ## Shared TurboWarp-style UI
 
 Account pages (`/my`, `/friends`, `/messages`, `/collaboration`, and `/packager`) share the root-level `mirror-ui.css` theme. It follows the TurboWarp/Scratch GUI visual language: compact Helvetica typography, a blue menu bar, white panels, compact rounded controls, clear focus states, and responsive navigation. The account dropdown uses the same blue accent and neutral menu styling. A dark color-scheme variant is included.
+
+
+## Scratchアカウント連携
+
+Scratch Auth（auth.itinerary.eu.org）による本人確認に対応しています。Scratch連携は既存のProject-TurboWarpアカウントに対して行い、未連携のScratchアカウントからはログインできません。
+
+Renderの環境変数に `PUBLIC_BASE_URL` を設定してください。値はデプロイ先のHTTPS URL（例: `https://your-service.onrender.com`）で、末尾のスラッシュは付けません。認証コールバックは `/auth/scratch/callback` です。
+
+Scratch AuthはScratch公式サービスではありません。認証結果はサーバー側から検証APIへ照会し、返されたリダイレクト先が開始時のURLと完全一致することを確認します。ScratchのパスワードはProject-TurboWarpに送信しません。
