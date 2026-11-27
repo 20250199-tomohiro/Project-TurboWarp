@@ -35,7 +35,7 @@
       img.style.cssText='display:block!important;width:20px!important;height:20px!important;max-width:20px!important;max-height:20px!important;object-fit:contain!important;flex:0 0 20px!important';
       summary.append(img);
     }
-    summary.append(el('span','',label),el('span','mirror-caret','▾'));
+    summary.append(el('span','',label),el('span','mirror-caret',''));
     const pop=el('div','mirror-menu-pop');d.append(summary,pop);return {d,pop};
   };
   const sync=()=>{
