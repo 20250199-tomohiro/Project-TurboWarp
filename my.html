@@ -76,11 +76,14 @@
     <p id="scratchStatus" role="status" aria-live="polite"></p>
     <div id="scratchProjects" class="scratch-projects"></div>
   </section>
-  <div class="upload">
-    <p>パソコンに保存した .sb3 ファイルを、「私の作品」に追加できます(1つの作品は <span id="maxMb">15</span>MB まで)。</p>
-    <input type="file" id="file" accept=".sb3" hidden>
-    <button type="button" class="primary" id="uploadBtn">ファイルから追加</button>
-  </div>
+  <section class="upload" id="privateProjectImport">
+    <h2>非公開作品を追加する</h2>
+    <p>Scratchで自分の作品を開き、「ファイル」→「コンピューターに保存する」から .sb3 ファイルを保存してください。そのファイルをここから追加できます。</p>
+    <p><a href="https://scratch.mit.edu/mystuff/" target="_blank" rel="noopener noreferrer">Scratchの「私の作品」を開く</a></p>
+    <p>1つの作品は <span id="maxMb">15</span>MB までです。Scratchのパスワードや認証コードをProject-TurboWarpに入力する必要はありません。</p>
+    <input type="file" id="file" accept=".sb3,application/x.scratch.sb3" hidden>
+    <button type="button" class="primary" id="uploadBtn">.sb3ファイルから追加</button>
+  </section>
 </main>
 <script>
 (() => {
