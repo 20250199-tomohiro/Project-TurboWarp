@@ -41,6 +41,14 @@
   .actions button, .actions .btn { padding: 6px 10px; font-size: 13px; }
   .upload { margin-top: 24px; padding-top: 16px; border-top: 1px solid var(--line); }
   .upload p { margin: 0 0 8px; font-size: 13px; color: var(--muted); }
+  .scratch-search{display:flex;gap:8px;flex-wrap:wrap;margin:10px 0}
+  .scratch-search input{flex:1 1 240px;min-width:0}
+  .scratch-projects{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:12px;margin-top:12px}
+  .scratch-project{display:flex;flex-direction:column;gap:8px;padding:10px;border:1px solid var(--line);border-radius:10px;background:var(--card)}
+  .scratch-project img{display:block;width:100%;aspect-ratio:4/3;object-fit:cover;border-radius:6px;background:var(--bg)}
+  .scratch-project strong{overflow-wrap:anywhere}
+  #scratchStatus{min-height:1.4em;color:var(--muted)}
+
 </style>
 <link rel="stylesheet" href="/mirror-ui.css?v=3">
 <script src="/mirror-theme.js?v=i18n1" defer></script></head>
@@ -60,6 +68,14 @@
   <p id="status" role="status"></p>
   <div id="list"></div>
 
+  <section class="upload" id="scratchImport">
+    <h2>Scratchの作品を追加</h2>
+    <p>Scratchのユーザー名を入力すると、そのユーザーが公開している作品を一覧表示して、このアカウントの「私の作品」に取り込めます。</p>
+    <p>Scratchのパスワードは入力しないでください。非公開作品は取り込めません。</p>
+    <div class="scratch-search"><input id="scratchUsername" type="text" maxlength="20" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Scratchユーザー名"><button type="button" class="primary" id="scratchSearchBtn">作品を検索</button></div>
+    <p id="scratchStatus" role="status" aria-live="polite"></p>
+    <div id="scratchProjects" class="scratch-projects"></div>
+  </section>
   <div class="upload">
     <p>パソコンに保存した .sb3 ファイルを、「私の作品」に追加できます(1つの作品は <span id="maxMb">15</span>MB まで)。</p>
     <input type="file" id="file" accept=".sb3" hidden>
@@ -187,6 +203,40 @@
       setStatus(err.message);
     }
   };
+
+  const scratchStatus = (message, bad = false) => {
+    const el = $('scratchStatus'); el.textContent = message; el.style.color = bad ? 'var(--bad)' : 'var(--muted)';
+  };
+  const searchScratch = async () => {
+    const username = $('scratchUsername').value.trim();
+    if (!/^[A-Za-z0-9_-]{1,20}$/.test(username)) return scratchStatus('Scratchユーザー名を正しく入力してください。', true);
+    $('scratchSearchBtn').disabled = true; $('scratchProjects').replaceChildren(); scratchStatus('Scratchの公開作品を検索しています…');
+    try {
+      const response = await fetch('/my/api/scratch/' + encodeURIComponent(username) + '/projects', { headers: { Accept: 'application/json' }, credentials: 'same-origin' });
+      const data = await response.json(); if (!response.ok) throw new Error(data.message || '作品一覧を取得できませんでした');
+      if (!data.projects.length) { scratchStatus('公開されている作品が見つかりませんでした。'); return; }
+      scratchStatus(data.username + ' の公開作品 ' + data.projects.length + ' 件');
+      for (const project of data.projects) {
+        const card = document.createElement('article'); card.className = 'scratch-project';
+        const image = document.createElement('img'); image.src = project.thumbnail; image.alt = ''; image.loading = 'lazy';
+        const title = document.createElement('strong'); title.textContent = project.title;
+        const link = document.createElement('a'); link.href = 'https://scratch.mit.edu/projects/' + encodeURIComponent(project.id) + '/'; link.target = '_blank'; link.rel = 'noopener noreferrer'; link.textContent = 'Scratchで見る';
+        const add = document.createElement('button'); add.type = 'button'; add.className = 'primary'; add.textContent = '私の作品に追加';
+        add.addEventListener('click', async () => {
+          add.disabled = true; add.textContent = '追加中…';
+          try {
+            const r = await fetch('/my/api/scratch/import', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ projectId: project.id }) });
+            const result = await r.json(); if (!r.ok) throw new Error(result.message || '取り込みに失敗しました');
+            scratchStatus('「' + result.title + '」を私の作品に追加しました。'); await load(true); add.textContent = '追加済み';
+          } catch (error) { scratchStatus(error.message, true); add.disabled = false; add.textContent = '私の作品に追加'; }
+        });
+        card.append(image, title, link, add); $('scratchProjects').append(card);
+      }
+    } catch (error) { scratchStatus(error.message, true); }
+    finally { $('scratchSearchBtn').disabled = false; }
+  };
+  $('scratchSearchBtn').addEventListener('click', searchScratch);
+  $('scratchUsername').addEventListener('keydown', (event) => { if (event.key === 'Enter') searchScratch(); });
 
   $('uploadBtn').addEventListener('click', () => $('file').click());
   $('file').addEventListener('change', async () => {
