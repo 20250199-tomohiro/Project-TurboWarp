@@ -301,6 +301,11 @@ try {
     saveOver.className = 'mas-item';
     saveOver.addEventListener('click', () => { setOpen(false); saveProject(true); });
 
+    const profileLink = document.createElement('a');
+    profileLink.className = 'mas-item';
+    profileLink.href = '/account';
+    profileLink.textContent = 'アカウントページ';
+
     const sep = document.createElement('div');
     sep.className = 'mas-sep';
 
@@ -311,7 +316,7 @@ try {
 
     // 機能ページへの導線は共通ナビゲーションバーに集約し、
     // アカウントメニューには重複して表示しない。
-    menu.append(who, myLink, saveNew, saveOver, sep, logout);
+    menu.append(who, profileLink, myLink, saveNew, saveOver, sep, logout);
 
     const setOpen = (open) => {
       menu.hidden = !open;
