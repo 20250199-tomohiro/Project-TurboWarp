@@ -384,7 +384,7 @@ try {
       updateMenu();
     }
     const bar = findMenuBar();
-    const siteNav = !bar ? document.querySelector('.mirror-topbar .mirror-main-nav') : null;
+    const siteNav = !bar ? document.querySelector('.mirror-topbar') : null;
     wrap.classList.toggle('mas-fixed', !bar && !siteNav);
     wrap.classList.toggle('mas-site-menu', !!siteNav);
     const target = bar || siteNav || document.body;
