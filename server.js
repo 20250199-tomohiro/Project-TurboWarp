@@ -288,7 +288,7 @@ const loginPage = (message = '') => `<!doctype html>
   <input id="p" type="password" name="password" required maxlength="256" autocomplete="current-password">
   <button id="b" type="submit">ログイン</button>
   <a class="scratch-login" href="/auth/scratch/start?mode=login">Sign in with Scratch</a>
-  <p id="msg">${message}</p>
+  <p id="msg">${escapeHtml(message)}</p>
   <p class="note">アカウントをお持ちではないですか?管理者に連絡してください!</p>
 </form>
 <script>
@@ -389,9 +389,15 @@ app.get('/auth/scratch/callback', async (req, res) => {
       if (!current || current.id !== authState.account_id) {
         return res.status(403).type('html').send(scratchResultPage('連携を開始したProject-TurboWarpアカウントと一致しません。ログインし直してください。'));
       }
-      const linked = await q('UPDATE accounts SET scratch_username=$1 WHERE id=$2 AND (scratch_username IS NULL OR lower(scratch_username)=lower($1)) RETURNING id',
-        [scratchUsername, current.id]);
-      if (!linked.rows[0]) return res.status(409).type('html').send(scratchResultPage('このScratchアカウントは別のProject-TurboWarpアカウントに連携済みです。'));
+      let linked;
+      try {
+        linked = await q('UPDATE accounts SET scratch_username=$1 WHERE id=$2 AND (scratch_username IS NULL OR lower(scratch_username)=lower($1)) RETURNING id',
+          [scratchUsername, current.id]);
+      } catch (err) {
+        if (err && err.code === '23505') return res.status(409).type('html').send(scratchResultPage('このScratchアカウントは別のProject-TurboWarpアカウントに連携済みです。'));
+        throw err;
+      }
+      if (!linked.rows[0]) return res.status(409).type('html').send(scratchResultPage('このアカウントには別のScratchアカウントが連携済みです。'));
       await logEvent(current.username, 'scratch_linked', req, scratchUsername);
       return res.type('html').send(scratchResultPage('Scratchアカウント「' + scratchUsername + '」を連携しました。', true));
     }
