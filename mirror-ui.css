@@ -190,18 +190,31 @@ body.mirror-search-page #more{display:block;margin:24px auto!important}
   body.mirror-search-page .mirror-search-form button[type="submit"]{grid-column:2;grid-row:2}
 }
 
-/* New-project shortcut: same compact menu-bar rhythm as the Home item. */
-.mirror-main-nav .mirror-new-project{
+/* Prominent new-project action, kept inside the navigation bar. */
+.mirror-main-nav a.mirror-new-project{
+  align-self:center!important;
+  min-height:40px!important;
+  height:40px!important;
+  margin:0 10px 0 2px!important;
+  padding:0 18px!important;
+  gap:5px!important;
+  border:1px solid var(--mirror-accent)!important;
+  border-radius:7px!important;
   background:var(--mirror-accent)!important;
   color:#fff!important;
-  font-weight:700!important;
-  border-radius:4px!important;
-  margin:0 5px 0 0!important;
-  padding:0 14px!important;
+  font-size:15px!important;
+  font-weight:800!important;
+  letter-spacing:.01em!important;
+  box-shadow:0 2px 7px #0003!important;
 }
-.mirror-main-nav .mirror-new-project:hover{
-  filter:brightness(.94);
+.mirror-main-nav a.mirror-new-project:hover,
+.mirror-main-nav a.mirror-new-project:focus-visible{
+  filter:brightness(.92);
+  background:var(--mirror-accent-hover)!important;
+  border-color:var(--mirror-accent-hover)!important;
   color:#fff!important;
+  outline:2px solid #ffffff88!important;
+  outline-offset:-3px!important;
 }
 
 /* Keep account dropdown visually consistent with TurboWarp menu surfaces. */
