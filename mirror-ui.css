@@ -268,3 +268,43 @@ body.mirror-search-page #more{display:block;margin:24px auto!important}
 .mirror-menu-dropdown .mirror-menu-option:focus-visible{
   background:var(--mirror-soft)!important;
 }
+
+/* Account dropdown deliberately mirrors the editor's account-menu.js appearance. */
+#mirror-account-menu{height:56px!important;display:flex!important;align-items:center!important}
+#mirror-account-menu>.mirror-menu-trigger{
+  height:40px!important;min-height:40px!important;margin:8px 4px!important;padding:0 14px!important;
+  border:0!important;border-radius:7px!important;background:#ffffff22!important;color:#fff!important;
+  font:700 14px/1 "Helvetica Neue",Helvetica,Arial,sans-serif!important;
+}
+#mirror-account-menu>.mirror-menu-trigger:hover,
+#mirror-account-menu[open]>.mirror-menu-trigger{background:#ffffff33!important}
+#mirror-account-menu>.mirror-menu-pop{
+  position:absolute!important;top:calc(100% + 6px)!important;right:0!important;left:auto!important;
+  display:flex!important;flex-direction:column!important;gap:8px!important;
+  width:344px!important;min-width:344px!important;max-width:min(90vw,380px)!important;
+  padding:8px!important;margin:0!important;overflow:hidden!important;
+  background:var(--mirror-panel)!important;color:var(--mirror-text)!important;
+  border:1px solid var(--mirror-border)!important;border-radius:8px!important;
+  box-shadow:0 8px 24px rgba(0,0,0,.18)!important;z-index:2147483000!important;
+}
+#mirror-account-menu .mirror-account-status{
+  padding:8px 10px 4px!important;margin:0!important;color:var(--mirror-text)!important;
+  font:700 14px/1.4 "Helvetica Neue",Helvetica,Arial,sans-serif!important;
+}
+#mirror-account-menu .mirror-account-name{display:inline!important;color:var(--mirror-text)!important;font:inherit!important}
+#mirror-account-menu .mirror-account-name::before{content:"ログイン中: "}
+#mirror-account-menu .mirror-account-id{display:none!important}
+#mirror-account-menu .mirror-menu-separator{height:1px!important;flex:0 0 1px!important;margin:1px 0!important;background:var(--mirror-border)!important}
+#mirror-account-menu .mirror-menu-option{
+  display:flex!important;align-items:center!important;justify-content:center!important;
+  width:100%!important;min-height:50px!important;padding:10px 12px!important;margin:0!important;
+  border:0!important;border-radius:7px!important;background:var(--mirror-soft)!important;
+  color:var(--mirror-text)!important;text-align:center!important;
+  font:700 14px/1.4 "Helvetica Neue",Helvetica,Arial,sans-serif!important;
+}
+#mirror-account-menu .mirror-menu-option:hover,
+#mirror-account-menu .mirror-menu-option:focus-visible{background:var(--mirror-border)!important;outline:0!important}
+#mirror-account-menu .mirror-account-logout{
+  min-height:50px!important;background:var(--mirror-accent)!important;color:#fff!important;
+}
+#mirror-account-menu .mirror-account-logout:hover{filter:brightness(.92)!important}
