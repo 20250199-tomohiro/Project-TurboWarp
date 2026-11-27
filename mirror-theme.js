@@ -62,20 +62,9 @@
       const b=button('',()=>save({accentTheme:v}));b.dataset.themeAccent=v;
       const sw=el('span','mirror-accent-swatch');sw.style.background=c;b.append(sw,document.createTextNode(t));settings.pop.append(b);
     });
-    const account=menu('mirror-account-menu','アカウント','');
-    const accountStatus=el('div','mirror-account-status','読み込み中…');account.pop.append(accountStatus);
-    const loadAccount=async()=>{
-      try{
-        const r=await fetch('/api/account/me',{credentials:'same-origin',cache:'no-store'});
-        if(!r.ok)throw Error('ログインしていません');
-        const a=await r.json();accountStatus.replaceChildren(el('strong','mirror-account-name',a.username),el('small','mirror-account-id','ID: '+a.id));
-        account.pop.append(el('div','mirror-menu-separator'));
-        account.pop.append(button('ログアウト',()=>location.href='/logout','mirror-menu-option mirror-account-logout'));
-      }catch(_){accountStatus.textContent='ログイン';account.pop.append(button('ログイン',()=>location.href='/login'));}
-    };
-    tools.append(settings.d,account.d);
+    tools.append(settings.d);
     const search=header.querySelector('.mirror-search-form');if(search)header.insertBefore(tools,search);else header.append(tools);
-    await loadAccount();sync();
+    sync();
     document.addEventListener('click',e=>{document.querySelectorAll('.mirror-menu-dropdown[open]').forEach(d=>{if(!d.contains(e.target))d.open=false;});});
     window.addEventListener('storage',e=>{if(e.key===KEY){apply();sync();}});
   };
