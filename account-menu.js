@@ -5,6 +5,7 @@
 
   const ID = 'mirror-account-menu';
   let username = '';
+  let profileCache = null;
   let projects = [];
   let maxProjects = 5;
   let maxBytes = 15 * 1024 * 1024;
@@ -279,6 +280,7 @@ try {
     avatar.className = 'mas-avatar';
     avatar.alt = '';
     avatar.src = 'data:image/svg+xml,' + encodeURIComponent('<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64"><rect width="64" height="64" rx="32" fill="#d9dde5"/><circle cx="32" cy="24" r="12" fill="#87909f"/><path d="M10 60c2-13 10-20 22-20s20 7 22 20" fill="#87909f"/></svg>');
+    if (profileCache && profileCache.has_avatar) avatar.src = '/api/profile/' + profileCache.id + '/avatar';
     const label = document.createElement('span');
     label.className = 'mas-label';
     label.textContent = username;
@@ -440,6 +442,7 @@ try {
           .then((res) => (res.ok ? res.json() : null))
           .then((profile) => {
             if (!profile) return;
+            profileCache = profile;
             if (els.label) els.label.textContent = profile.username || username;
             if (els.avatar && profile.has_avatar) els.avatar.src = '/api/profile/' + profile.id + '/avatar';
           })
