@@ -806,7 +806,7 @@ app.post('/my/api/scratch/import', requireXhr, express.json({ limit: '8kb' }), a
   const acc = getLoggedInUser(req);
   if (!acc) return res.status(401).json({ message: 'ログインしてください' });
   const projectId = String(req.body && req.body.projectId || '');
-  if (!/^\\d{1,20}$/.test(projectId)) return res.status(400).json({ message: 'Scratchの作品IDが正しくありません' });
+  if (!/^\d{1,20}$/.test(projectId)) return res.status(400).json({ message: 'Scratchの作品IDが正しくありません' });
   try {
     const { rows: countRows } = await q('SELECT count(*)::int AS count FROM projects WHERE account_id=$1::int', [acc.id]);
     if (countRows[0].count >= MAX_PROJECTS) return res.status(409).json({ message: '保存できる作品数の上限に達しています。「私の作品」で不要な作品を削除してください' });
