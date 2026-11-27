@@ -225,7 +225,7 @@
         add.addEventListener('click', async () => {
           add.disabled = true; add.textContent = '追加中…';
           try {
-            const r = await fetch('/my/api/scratch/import', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', Accept: 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ projectId: project.id }) });
+            const r = await fetch('/my/api/scratch/import', { method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Requested-With': 'XMLHttpRequest', 'X-Mirror': '1', Accept: 'application/json' }, credentials: 'same-origin', body: JSON.stringify({ projectId: project.id }) });
             const result = await r.json(); if (!r.ok) throw new Error(result.message || '取り込みに失敗しました');
             scratchStatus('「' + result.title + '」を私の作品に追加しました。'); await load(true); add.textContent = '追加済み';
           } catch (error) { scratchStatus(error.message, true); add.disabled = false; add.textContent = '私の作品に追加'; }
