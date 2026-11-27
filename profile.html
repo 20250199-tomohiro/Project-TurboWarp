@@ -1,0 +1,99 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="robots" content="noindex">
+<title>アカウントページ</title>
+<link rel="stylesheet" href="/mirror-ui.css?v=3"><script src="/mirror-theme.js?v=i18n1" defer></script>
+<style>
+:root{--accent:#FF4C4C;--bg:#f3f4f6;--fg:#171717;--card:#fff;--muted:#666;--line:#d1d5db;color-scheme:light dark}
+@media(prefers-color-scheme:dark){:root{--bg:#111827;--fg:#f3f4f6;--card:#1f2937;--muted:#9ca3af;--line:#374151}}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--fg);font-family:system-ui,sans-serif}
+header{padding:14px 20px}.wrap{width:min(860px,100%);margin:24px auto;padding:0 16px}
+.panel{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:22px;margin-bottom:16px}
+h1{font-size:24px;margin:0 0 18px}h2{font-size:18px;margin:0 0 14px}
+.identity{display:flex;gap:18px;align-items:center;flex-wrap:wrap}
+.avatar{width:112px;height:112px;border-radius:50%;object-fit:cover;background:var(--bg);border:1px solid var(--line)}
+.muted{color:var(--muted);font-size:13px}label{display:block;font-weight:650;margin:14px 0 6px}
+textarea,input,button{font:inherit}textarea{width:100%;min-height:140px;resize:vertical;padding:12px;border:1px solid var(--line);border-radius:9px;background:var(--bg);color:var(--fg)}
+input[type=file]{max-width:100%}button,.btn{border:0;border-radius:8px;padding:10px 15px;background:var(--accent);color:white;font-weight:700;cursor:pointer;text-decoration:none;display:inline-block}
+button:disabled{opacity:.55;cursor:default}.secondary{background:var(--bg);color:var(--fg);border:1px solid var(--line)}
+#status{min-height:1.5em;color:var(--muted);font-size:14px}.scratch{display:inline-flex;gap:8px;align-items:center;background:#4c97ff;color:white}
+[hidden]{display:none!important}
+</style>
+</head>
+<body>
+<header class="mirror-topbar"><a class="mirror-brand" href="/">TURBOWARP</a><nav class="mirror-main-nav"><a href="/">ホーム</a><a href="/my">私の作品</a><a href="/friends">フレンド</a><a href="/messages">メッセージ</a></nav></header>
+<main class="wrap">
+<section class="panel">
+<h1 id="pageTitle">アカウントページ</h1>
+<div class="identity">
+<img id="avatar" class="avatar" src="/logo.png" alt="プロフィールアイコン">
+<div><strong id="username">読み込み中…</strong><p class="muted" id="scratchName"></p><p class="muted">このページは自分とフレンドだけが閲覧できます。</p></div>
+</div>
+<p id="status" role="status"></p>
+</section>
+<section class="panel" id="editPanel">
+<h2>プロフィールを編集</h2>
+<label for="bio">自己紹介</label>
+<textarea id="bio" maxlength="1000" placeholder="自分について紹介しましょう（1000文字まで）"></textarea>
+<p class="muted">入力した自己紹介はフレンドがプロフィールページで閲覧できます。</p>
+<button id="saveBio">自己紹介を保存</button>
+<hr style="border:0;border-top:1px solid var(--line);margin:22px 0">
+<label for="avatarFile">プロフィールアイコン</label>
+<input id="avatarFile" type="file" accept="image/png,image/jpeg,image/webp">
+<p class="muted">PNG・JPEG・WebP、2MBまで。</p>
+<button id="uploadAvatar" class="secondary">アイコンをアップロード</button>
+</section>
+<section class="panel" id="viewPanel" hidden>
+<h2>自己紹介</h2><p id="bioView" style="white-space:pre-wrap;overflow-wrap:anywhere"></p>
+</section>
+<section class="panel" id="linkPanel">
+<h2>Scratchアカウント連携</h2>
+<p>Scratchアカウントを連携すると、次回からログイン画面の「Sign in with Scratch」でログインできます。</p>
+<p class="muted">ScratchのパスワードはProject-TurboWarpに入力しません。連携するScratchアカウントは他のProject-TurboWarpアカウントに重複して登録できません。</p>
+<p id="linkState"></p>
+<a class="btn scratch" id="linkButton" href="/auth/scratch/start?mode=link">Scratchと連携する</a>
+</section>
+</main>
+<script>
+(async()=>{
+ const $=id=>document.getElementById(id);
+ const path=location.pathname;
+ const match=path.match(/^\/profile\/(\d+)$/);
+ const own=!match;
+ const endpoint=own?'/api/profile/me':'/api/profile/'+match[1];
+ const status=(s)=>$('status').textContent=s||'';
+ try{
+  const res=await fetch(endpoint,{credentials:'same-origin',headers:{Accept:'application/json'}});
+  const data=await res.json().catch(()=>({}));
+  if(!res.ok) throw new Error(data.message||'プロフィールを読み込めませんでした');
+  $('username').textContent=data.username;
+  $('scratchName').textContent=data.scratch_username?'Scratch: '+data.scratch_username:'Scratch未連携';
+  $('bio').value=data.bio||'';
+  $('bioView').textContent=data.bio||'自己紹介はまだありません。';
+  if(data.has_avatar) $('avatar').src='/api/profile/'+data.id+'/avatar';
+  $('pageTitle').textContent=own?'アカウントページ':data.username+' のプロフィール';
+  $('editPanel').hidden=!own;
+  $('viewPanel').hidden=own;
+  $('linkPanel').hidden=!own;
+  if(own){
+   $('linkState').textContent=data.scratch_username?'連携済み: '+data.scratch_username:'Scratchアカウントはまだ連携されていません。';
+   $('linkButton').textContent=data.scratch_username?'Scratchアカウントを再連携':'Scratchと連携する';
+   $('linkButton').hidden=!!data.scratch_username;
+   $('saveBio').addEventListener('click',async()=>{
+    const r=await fetch('/api/profile/me',{method:'PATCH',credentials:'same-origin',headers:{'Content-Type':'application/json','X-Mirror':'1'},body:JSON.stringify({bio:$('bio').value})});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'保存できませんでした');status('自己紹介を保存しました。');
+   });
+   $('uploadAvatar').addEventListener('click',async()=>{
+    const file=$('avatarFile').files[0];if(!file)return status('画像ファイルを選択してください。');
+    if(file.size>2*1024*1024)return status('画像は2MB以下にしてください。');
+    const r=await fetch('/api/profile/avatar',{method:'POST',credentials:'same-origin',headers:{'Content-Type':file.type,'X-Mirror':'1'},body:file});
+    const d=await r.json().catch(()=>({}));if(!r.ok)throw new Error(d.message||'アップロードできませんでした');
+    $('avatar').src='/api/profile/'+data.id+'/avatar?t='+Date.now();status('アイコンを更新しました。');
+   });
+  }
+ }catch(e){status(e.message);$('editPanel').hidden=true;$('linkPanel').hidden=true;}
+})();
+</script>
+</body></html>
