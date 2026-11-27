@@ -742,11 +742,17 @@ app.post('/api/profile/avatar', requireProfileWrite, express.raw({type:['image/p
   res.json({ok:true});
 });
 app.get('/api/profile/:id/avatar', async (req,res) => {
-  const id=parseId(req.params.id);
+  const viewer=getLoggedInUser(req), id=parseId(req.params.id);
+  if(!viewer) return res.status(401).end();
   if(!id) return res.status(400).end();
+  if(viewer.id!==id){
+    const low=Math.min(viewer.id,id), high=Math.max(viewer.id,id);
+    const friendship=await q('SELECT 1 FROM friendships WHERE account_low=$1 AND account_high=$2',[low,high]);
+    if(!friendship.rowCount) return res.status(403).end();
+  }
   const result=await q('SELECT avatar,avatar_mime FROM accounts WHERE id=$1',[id]);
   if(!result.rows[0] || !result.rows[0].avatar) return res.status(404).end();
-  res.set('Cache-Control','private, max-age=300');
+  res.set('Cache-Control','private, no-store');
   res.type(result.rows[0].avatar_mime || 'application/octet-stream').send(result.rows[0].avatar);
 });
 app.get('/api/profile/:id', async (req,res) => {
