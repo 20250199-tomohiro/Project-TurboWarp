@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="robots" content="noindex">
+<title>フレンド・共同制作</title>
+<style>
+  :root {
+    --accent: #FF4C4C; --bg: #f3f4f6; --fg: #111; --card: #fff; --muted: #666; --line: #d1d5db; --bad: #b00020; --ok: #15803d;
+    color-scheme: light dark;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root { --bg: #111827; --fg: #f3f4f6; --card: #1f2937; --muted: #9ca3af; --line: #374151; --bad: #f87171; --ok: #4ade80; }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--fg); font-family: system-ui, sans-serif; }
+  header { display: flex; flex-direction: column; align-items: center; gap: 12px; padding: 24px 16px 8px; }
+  .logo { display: block; width: min(320px, 70vw); height: auto; }
+  nav { display: flex; gap: 16px; font-size: 14px; }
+  nav a { color: var(--fg); }
+  main { width: min(900px, 100%); margin: 0 auto; padding: 16px; display: grid; gap: 16px; }
+  h1 { margin: 0; font-size: 22px; }
+  h2 { margin: 0 0 8px; font-size: 17px; }
+  section { background: var(--card); border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
+  input, button { font-size: 14px; padding: 8px 12px; border-radius: 8px; border: 1px solid var(--line);
+                  background: var(--card); color: var(--fg); }
+  button { cursor: pointer; }
+  button:disabled { opacity: .6; cursor: default; }
+  .primary { border: 0; background: var(--accent); color: #fff; font-weight: 700; }
+  .danger { color: var(--bad); border-color: var(--bad); }
+  .row { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin: 6px 0; }
+  .row .grow { flex: 1; min-width: 120px; }
+  .muted { color: var(--muted); font-size: 13px; }
+  .code { font-family: ui-monospace, monospace; font-weight: 700; letter-spacing: .1em; font-size: 18px; }
+  #status { min-height: 1.5em; font-size: 14px; color: var(--bad); }
+  #status.ok { color: var(--ok); }
+  ul { list-style: none; margin: 0; padding: 0; }
+  li { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 6px 0; border-top: 1px solid var(--line); }
+  li:first-child { border-top: 0; }
+  li .grow { flex: 1; min-width: 100px; word-break: break-word; }
+  .done { text-decoration: line-through; color: var(--muted); }
+  .chat { max-height: 260px; overflow: auto; border: 1px solid var(--line); border-radius: 8px; padding: 8px; margin: 8px 0; }
+  .msg { margin: 4px 0; font-size: 14px; word-break: break-word; }
+  .msg.me { text-align: right; }
+  .badge { background: var(--accent); color: #fff; border-radius: 999px; padding: 0 7px; font-size: 12px; }
+  .online { color: var(--ok); }
+</style>
+</head>
+<body>
+<header>
+  <a href="/"><img class="logo" src="/logo.png" alt="TURBOWARP"></a>
+  <nav>
+    <a href="/">← トップへ</a>
+    <a href="/my">私の作品</a>
+  </nav>
+</header>
+<main>
+  <h1>フレンド・共同制作</h1>
+  <p id="status" role="status"></p>
+
+  <section>
+    <h2>フレンド</h2>
+    <p class="muted">あなたのフレンドコード(相手に教えると、フレンド申請してもらえます)</p>
+    <p><span class="code" id="myCode">…</span></p>
+    <div class="row">
+      <input id="reqCode" class="grow" placeholder="相手のフレンドコード(8文字)" maxlength="8" autocomplete="off">
+      <button type="button" class="primary" id="reqBtn">申請する</button>
+    </div>
+    <div id="incomingBox" hidden><h3>届いている申請</h3><ul id="incoming"></ul></div>
+    <div id="outgoingBox" hidden><h3>送った申請</h3><ul id="outgoing"></ul></div>
+    <h3>フレンド一覧</h3>
+    <ul id="friends"></ul>
+    <p class="muted" id="friendsEmpty" hidden>まだフレンドがいません</p>
+    <div id="chatBox" hidden>
+      <h3 id="chatTitle"></h3>
+      <div class="chat" id="chat"></div>
+      <div class="row">
+        <input id="chatInput" class="grow" maxlength="2000" placeholder="メッセージ" autocomplete="off">
+        <button type="button" class="primary" id="chatSend">送信</button>
+        <button type="button" id="chatClose">閉じる</button>
+      </div>
+    </div>
+  </section>
+
+  <section>
+    <h2>共同制作ルーム</h2>
+    <div class="row">
+      <select id="projectSelect" class="grow"></select>
+      <button type="button" class="primary" id="createBtn">この作品でルームを作る</button>
+    </div>
+    <div class="row">
+      <input id="joinCode" class="grow" placeholder="参加コード(6文字)" maxlength="6" autocomplete="off">
+      <button type="button" id="joinBtn">参加する</button>
+    </div>
+    <h3>参加中のルーム</h3>
+    <ul id="rooms"></ul>
+    <p class="muted" id="roomsEmpty" hidden>参加中のルームはありません</p>
+  </section>
+
+  <section id="roomBox" hidden>
+    <h2>ルーム <span class="code" id="roomCode"></span></h2>
+    <p class="muted" id="roomInfo"></p>
+    <h3>共有している作品</h3>
+    <p class="muted">共有中の作品は、ルームの中だけで更新されます。作成者の元の作品には、ルームを閉じるときに反映されます。他の人が先に保存していた場合は、最新を取得してからもう一度保存してください。</p>
+    <div class="row">
+      <button type="button" id="dlBtn">最新の作品をダウンロード</button>
+      <input type="file" id="upFile" accept=".sb3" hidden>
+      <button type="button" class="primary" id="upBtn">.sb3 をアップロードして更新</button>
+    </div>
+    <h3>参加者</h3>
+    <ul id="members"></ul>
+    <h3>ToDo</h3>
+    <div class="row">
+      <input id="todoInput" class="grow" maxlength="300" placeholder="やることを追加" autocomplete="off">
+      <button type="button" id="todoAdd">追加</button>
+    </div>
+    <ul id="todos"></ul>
+    <div class="row">
+      <button type="button" id="leaveBtn">ルームから抜ける</button>
+      <button type="button" class="danger" id="closeBtn">ルームを閉じる(作成者のみ)</button>
+    </div>
+  </section>
+</main>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const API = '/collab/api';
+  let me = null;
+  let currentRoom = null; // { code, revision, lastEventId, isOwner }
+  let pollToken = 0;
+  let chatFriend = null;
+  let chatTimer = null;
+
+  const setStatus = (text, ok) => {
+    $('status').textContent = text || '';
+    $('status').classList.toggle('ok', !!ok);
+  };
+  const api = async (method, path, body, opts = {}) => {
+    const headers = { 'X-Mirror': '1' };
+    let payload;
+    if (body instanceof ArrayBuffer || body instanceof Blob) {
+      headers['Content-Type'] = 'application/octet-stream';
+      payload = body;
+    } else if (body !== undefined) {
+      headers['Content-Type'] = 'application/json';
+      payload = JSON.stringify(body);
+    }
+    Object.assign(headers, opts.headers || {});
+    const res = await fetch(API + path, { method, headers, body: payload, credentials: 'same-origin', signal: opts.signal });
+    let data = null;
+    try { data = await res.json(); } catch (e) { data = null; }
+    if (!res.ok) {
+      const err = new Error((data && data.message) || '操作に失敗しました');
+      err.status = res.status;
+      err.data = data;
+      throw err;
+    }
+    return data;
+  };
+  const el = (tag, props, ...children) => {
+    const node = document.createElement(tag);
+    for (const [k, v] of Object.entries(props || {})) {
+      if (k === 'class') node.className = v;
+      else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+      else node.setAttribute(k, v);
+    }
+    for (const c of children) node.append(c);
+    return node;
+  };
+  const btn = (label, onClick, cls) => el('button', { type: 'button', class: cls || '', onclick: onClick }, label);
+  const run = (fn) => async (...a) => {
+    try { await fn(...a); } catch (e) { setStatus(e.message); }
+  };
+
+  // ---------------- フレンド ----------------
+  const loadFriends = async () => {
+    const d = await api('GET', '/friends');
+    $('myCode').textContent = d.code;
+    const inc = $('incoming'); inc.replaceChildren();
+    for (const r of d.incoming) {
+      inc.append(el('li', {}, el('span', { class: 'grow' }, r.username),
+        btn('承認', run(async () => { await api('POST', '/friends/requests/' + r.id + '/respond', { accept: true }); await loadFriends(); }), 'primary'),
+        btn('断る', run(async () => { await api('POST', '/friends/requests/' + r.id + '/respond', { accept: false }); await loadFriends(); }))));
+    }
+    $('incomingBox').hidden = !d.incoming.length;
+    const out = $('outgoing'); out.replaceChildren();
+    for (const r of d.outgoing) out.append(el('li', {}, el('span', { class: 'grow' }, r.username + '(返事待ち)')));
+    $('outgoingBox').hidden = !d.outgoing.length;
+    const fl = $('friends'); fl.replaceChildren();
+    for (const f of d.friends) {
+      const name = el('span', { class: 'grow' }, f.username);
+      if (f.unread) name.append(' ', el('span', { class: 'badge' }, String(f.unread)));
+      fl.append(el('li', {}, name,
+        btn('メッセージ', () => openChat(f)),
+        btn('解除', run(async () => {
+          if (!confirm(f.username + ' さんをフレンドから外しますか?共同制作ルームからも、お互いに外れます。')) return;
+          await api('DELETE', '/friends/' + f.id);
+          if (chatFriend && chatFriend.id === f.id) closeChat();
+          await Promise.all([loadFriends(), loadRooms()]);
+        }), 'danger')));
+    }
+    $('friendsEmpty').hidden = d.friends.length > 0;
+  };
+  $('reqBtn').addEventListener('click', run(async () => {
+    const code = $('reqCode').value.trim();
+    const r = await api('POST', '/friends/request', { code });
+    $('reqCode').value = '';
+    setStatus(r.accepted ? 'フレンドになりました' : '申請を送りました', true);
+    await loadFriends();
+  }));
+
+  const renderChat = (messages) => {
+    const box = $('chat');
+    const stick = box.scrollTop + box.clientHeight >= box.scrollHeight - 30;
+    box.replaceChildren();
+    for (const m of messages) {
+      box.append(el('div', { class: 'msg' + (m.sender_id === me ? ' me' : '') }, m.body));
+    }
+    if (stick) box.scrollTop = box.scrollHeight;
+  };
+  const refreshChat = async () => {
+    if (!chatFriend) return;
+    const d = await api('GET', '/messages/' + chatFriend.id);
+    renderChat(d.messages);
+  };
+  const openChat = run(async (f) => {
+    chatFriend = f;
+    $('chatTitle').textContent = f.username + ' さんとのメッセージ';
+    $('chatBox').hidden = false;
+    await refreshChat();
+    $('chat').scrollTop = $('chat').scrollHeight;
+    clearInterval(chatTimer);
+    chatTimer = setInterval(() => { if (!document.hidden) refreshChat().catch(() => {}); }, 5000);
+    loadFriends().catch(() => {});
+  });
+  const closeChat = () => {
+    chatFriend = null;
+    clearInterval(chatTimer);
+    $('chatBox').hidden = true;
+  };
+  $('chatClose').addEventListener('click', closeChat);
+  const sendChat = run(async () => {
+    const body = $('chatInput').value.trim();
+    if (!chatFriend || !body) return;
+    await api('POST', '/messages/' + chatFriend.id, { body });
+    $('chatInput').value = '';
+    await refreshChat();
+  });
+  $('chatSend').addEventListener('click', sendChat);
+  $('chatInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) sendChat(); });
+
+  // ---------------- ルーム ----------------
+  const loadProjects = async () => {
+    const res = await fetch('/my/api/projects', { credentials: 'same-origin' });
+    const d = await res.json();
+    const sel = $('projectSelect'); sel.replaceChildren();
+    for (const p of d.projects) sel.append(el('option', { value: String(p.id) }, p.title));
+    $('createBtn').disabled = !d.projects.length;
+    if (!d.projects.length) sel.append(el('option', { value: '' }, '「私の作品」に作品がありません'));
+  };
+  const loadRooms = async () => {
+    const d = await api('GET', '/rooms');
+    const list = $('rooms'); list.replaceChildren();
+    for (const r of d.rooms) {
+      list.append(el('li', {}, el('span', { class: 'code' }, r.code),
+        el('span', { class: 'grow muted' }, (r.isOwner ? '自分が作成' : r.owner_name + ' さんが作成')),
+        btn('開く', () => openRoom(r.code), 'primary')));
+    }
+    $('roomsEmpty').hidden = d.rooms.length > 0;
+    if (currentRoom && !d.rooms.some(r => r.code === currentRoom.code)) leaveView();
+  };
+  $('createBtn').addEventListener('click', run(async () => {
+    const projectId = Number($('projectSelect').value);
+    const r = await api('POST', '/rooms', { projectId });
+    setStatus('ルームを作りました。参加コード: ' + r.code, true);
+    await loadRooms();
+    await openRoom(r.code);
+  }));
+  $('joinBtn').addEventListener('click', run(async () => {
+    const code = $('joinCode').value.trim();
+    const r = await api('POST', '/rooms/join', { code });
+    $('joinCode').value = '';
+    setStatus('ルームに参加しました', true);
+    await loadRooms();
+    await openRoom(r.code);
+  }));
+
+  const leaveView = () => {
+    pollToken++;
+    currentRoom = null;
+    $('roomBox').hidden = true;
+  };
+  const renderRoom = (d) => {
+    currentRoom = { code: d.code, revision: d.revision, lastEventId: d.lastEventId, isOwner: d.isOwner, ownerId: d.ownerId };
+    $('roomCode').textContent = d.code;
+    $('roomInfo').textContent = '共有の版: ' + d.revision + ' / 参加者 ' + d.members.length + '/' + d.maxMembers + ' 人';
+    $('leaveBtn').hidden = d.isOwner;
+    $('closeBtn').hidden = !d.isOwner;
+    const ml = $('members'); ml.replaceChildren();
+    for (const m of d.members) {
+      const label = el('span', { class: 'grow' }, m.username + (m.id === d.ownerId ? '(作成者)' : ''));
+      const li = el('li', {}, label, el('span', { class: m.online ? 'online' : 'muted' }, m.online ? 'オンライン' : 'オフライン'));
+      if (d.isOwner && m.id !== d.ownerId) {
+        li.append(btn('外す', run(async () => {
+          if (!confirm(m.username + ' さんをルームから外しますか?')) return;
+          await api('DELETE', '/rooms/' + d.code + '/members/' + m.id);
+          await refreshRoom();
+        }), 'danger'));
+      }
+      ml.append(li);
+    }
+    const tl = $('todos'); tl.replaceChildren();
+    for (const t of d.todos) {
+      const cb = el('input', { type: 'checkbox' });
+      cb.checked = t.done;
+      cb.addEventListener('change', run(async () => {
+        await api('PATCH', '/rooms/' + d.code + '/todos/' + t.id, { done: cb.checked });
+        await refreshRoom();
+      }));
+      const li = el('li', {}, cb, el('span', { class: 'grow' + (t.done ? ' done' : '') }, t.title));
+      if (d.isOwner || t.created_by === me) {
+        li.append(btn('削除', run(async () => {
+          await api('DELETE', '/rooms/' + d.code + '/todos/' + t.id);
+          await refreshRoom();
+        })));
+      }
+      tl.append(li);
+    }
+  };
+  const refreshRoom = async () => {
+    if (!currentRoom) return;
+    const d = await api('GET', '/rooms/' + currentRoom.code);
+    renderRoom(d);
+  };
+  const startPolling = async (code) => {
+    const token = ++pollToken;
+    while (token === pollToken && currentRoom && currentRoom.code === code) {
+      try {
+        const d = await api('GET', '/rooms/' + code + '/events?after=' + currentRoom.lastEventId);
+        if (token !== pollToken) return;
+        if (d.events.length) {
+          currentRoom.lastEventId = d.events[d.events.length - 1].id;
+          const updated = d.events.some(e => e.event_type === 'project-updated');
+          await refreshRoom();
+          if (updated) setStatus('他の参加者が作品を更新しました。「最新の作品をダウンロード」で取得できます', true);
+        } else {
+          await api('POST', '/rooms/' + code + '/heartbeat').catch(() => {});
+        }
+      } catch (e) {
+        if (e.status === 404) {
+          if (token === pollToken) { setStatus('このルームは利用できなくなりました'); await loadRooms().catch(() => {}); leaveView(); }
+          return;
+        }
+        await new Promise(r => setTimeout(r, 5000));
+      }
+    }
+  };
+  const openRoom = run(async (code) => {
+    leaveView();
+    const d = await api('GET', '/rooms/' + code);
+    $('roomBox').hidden = false;
+    renderRoom(d);
+    startPolling(code);
+    $('roomBox').scrollIntoView({ behavior: 'smooth' });
+  });
+
+  $('todoAdd').addEventListener('click', run(async () => {
+    const title = $('todoInput').value.trim();
+    if (!title || !currentRoom) return;
+    await api('POST', '/rooms/' + currentRoom.code + '/todos', { title });
+    $('todoInput').value = '';
+    await refreshRoom();
+  }));
+  $('todoInput').addEventListener('keydown', (e) => { if (e.key === 'Enter' && !e.isComposing) $('todoAdd').click(); });
+
+  $('dlBtn').addEventListener('click', () => {
+    if (currentRoom) location.href = API + '/rooms/' + currentRoom.code + '/project.sb3';
+  });
+  $('upBtn').addEventListener('click', () => $('upFile').click());
+  $('upFile').addEventListener('change', run(async () => {
+    const file = $('upFile').files[0];
+    $('upFile').value = '';
+    if (!file || !currentRoom) return;
+    try {
+      const r = await api('PUT', '/rooms/' + currentRoom.code + '/project', await file.arrayBuffer(),
+        { headers: { 'X-Collab-Revision': String(currentRoom.revision) } });
+      currentRoom.revision = r.revision;
+      setStatus('共有の作品を更新しました', true);
+      await refreshRoom();
+    } catch (e) {
+      if (e.status === 409) await refreshRoom();
+      throw e;
+    }
+  }));
+
+  $('leaveBtn').addEventListener('click', run(async () => {
+    if (!currentRoom || !confirm('このルームから抜けますか?')) return;
+    await api('POST', '/rooms/' + currentRoom.code + '/leave');
+    leaveView();
+    await loadRooms();
+  }));
+  $('closeBtn').addEventListener('click', run(async () => {
+    if (!currentRoom || !confirm('ルームを閉じますか?共有中の最新の作品が、元の作品に反映されます。')) return;
+    await api('DELETE', '/rooms/' + currentRoom.code);
+    leaveView();
+    setStatus('ルームを閉じて、作品を元の作品に反映しました', true);
+    await loadRooms();
+  }));
+
+  (async () => {
+    try {
+      const res = await fetch('/me', { credentials: 'same-origin' });
+      const who = await res.json();
+      // 自分のIDは、フレンド一覧や参加者一覧からは分からないので、ルーム情報の ownerId との比較に使う
+      me = who.id || null;
+      await Promise.all([loadFriends(), loadRooms(), loadProjects()]);
+    } catch (e) { setStatus(e.message); }
+  })();
+})();
+</script>
+</body>
+</html>

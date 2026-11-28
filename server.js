@@ -2,6 +2,7 @@ const crypto = require('crypto');
 const path = require('path');
 const express = require('express');
 const { Pool } = require('pg');
+const createSocialRouter = require('./collaboration');
 
 // =====================================================================
 // 設定(環境変数)
@@ -89,6 +90,7 @@ const initDb = async () => {
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
   )`);
   await q('CREATE INDEX IF NOT EXISTS feedback_created ON feedback (created_at DESC)');
+  await createSocialRouter.createSchema(q);
 };
 
 const cleanupLogs = async () => {
@@ -593,8 +595,15 @@ app.use((req, res, next) => {
 app.get('/me', (req, res) => {
   res.set('Cache-Control', 'no-store');
   const acc = getLoggedInUser(req);
-  res.json({ username: acc ? acc.username : '' });
+  res.json({ username: acc ? acc.username : '', id: acc ? acc.id : null });
 });
+
+// ---- フレンド・共同制作(ログインした利用者だけ) ----
+app.get('/collab', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.sendFile(path.join(__dirname, 'collab.html'));
+});
+app.use('/collab/api', createSocialRouter({ express, q, getLoggedInUser, maxProjectBytes: MAX_PROJECT_BYTES }));
 
 // ---- 私の作品(アカウントごとの保存) ----
 const requireXhr = (req, res, next) => {
@@ -854,6 +863,7 @@ const start = async () => {
   DUMMY_HASH = await hashPassword(crypto.randomBytes(8).toString('hex'));
   await refreshAccounts();
   await cleanupLogs();
+  await createSocialRouter.cleanup(q).catch((err) => console.error('共同制作の古いデータの削除に失敗しました:', err.message));
 
   setInterval(() => {
     refreshAccounts().catch((err) => console.error('アカウント情報の更新に失敗しました:', err.message));
@@ -861,6 +871,9 @@ const start = async () => {
   setInterval(() => {
     cleanupLogs().catch((err) => console.error('古いログの削除に失敗しました:', err.message));
   }, 24 * 60 * 60 * 1000);
+  setInterval(() => {
+    createSocialRouter.cleanup(q).catch((err) => console.error('共同制作の古いデータの削除に失敗しました:', err.message));
+  }, 60 * 60 * 1000);
 
   const port = process.env.PORT || 10000;
   app.listen(port, () => console.log('Started on port ' + port + ' (admin: /' + ADMIN_PATH + ')'));
