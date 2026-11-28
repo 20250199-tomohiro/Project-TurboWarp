@@ -716,6 +716,12 @@ app.get('/my/dl/:id/:token/project.sb3', async (req, res) => {
   return res.send(rows[0].data);
 });
 
+// ---- 稼働確認(スリープ防止用。ログイン不要で、中身はなにも返さない) ----
+app.get('/healthz', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.type('text/plain').send('ok');
+});
+
 // ---- ここから先は、ログインした利用者だけが見られる ----
 app.use((req, res, next) => {
   if (getLoggedInUser(req)) return next();
@@ -1006,6 +1012,14 @@ const start = async () => {
   setInterval(() => {
     createSocialRouter.cleanup(q).catch((err) => console.error('共同制作の古いデータの削除に失敗しました:', err.message));
   }, 60 * 60 * 1000);
+
+  // 自分のサイトに定期的にアクセスして、スリープしにくくする(Render が設定する RENDER_EXTERNAL_URL か、SITE_URL を使う)
+  const selfUrl = (process.env.SITE_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, '');
+  if (selfUrl && process.env.KEEP_ALIVE !== '0') {
+    const ping = () => fetch(selfUrl + '/healthz', { signal: AbortSignal.timeout(30000) })
+      .catch((err) => console.error('稼働確認のアクセスに失敗しました:', err.message));
+    setInterval(ping, 10 * 60 * 1000).unref();
+  }
 
   const port = process.env.PORT || 10000;
   app.listen(port, () => console.log('Started on port ' + port + ' (admin: /' + ADMIN_PATH + ')'));
