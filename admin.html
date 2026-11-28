@@ -153,7 +153,9 @@
     account_deleted: ['アカウント削除', 'ev-bad'],
     admin_login: ['管理者ログイン', 'ev-warn'],
     admin_login_failed: ['管理者ログイン失敗', 'ev-bad'],
-    admin_logout: ['管理者ログアウト', 'ev-warn']
+    admin_logout: ['管理者ログアウト', 'ev-warn'],
+    admin_granted: ['管理者権限の付与', 'ev-warn'],
+    admin_revoked: ['管理者権限の解除', 'ev-warn']
   };
 
   const fmtDate = (s) => {
@@ -237,6 +239,12 @@
         badge.className = 'badge ' + (a.enabled ? 'on' : 'off');
         badge.textContent = a.enabled ? '有効' : '無効';
         state.append(badge);
+        if (a.is_admin) {
+          const adminBadge = document.createElement('span');
+          adminBadge.className = 'badge on';
+          adminBadge.textContent = '管理者';
+          state.append(' ', adminBadge);
+        }
         tr.append(state);
 
         tr.append(cell(fmtDate(a.created_at)), cell(fmtDate(a.last_login)));
@@ -248,6 +256,16 @@
             if (a.enabled && !confirm('「' + a.username + '」を無効にします。ログイン中の場合は、すぐにログアウトされます。')) return;
             try {
               await api('accounts/' + a.id + '/enabled', { method: 'POST', body: { enabled: !a.enabled } });
+              await Promise.all([loadAccounts(), loadLogs(true)]);
+            } catch (err) { setMsg($('accountsMsg'), err.message); }
+          }),
+          actionButton(a.is_admin ? '管理者権限を外す' : '管理者権限を付ける', async () => {
+            const msg = a.is_admin
+              ? '「' + a.username + '」の管理者権限を外します。'
+              : '「' + a.username + '」に管理者権限を付けます。このアカウントでログインすると、管理画面のログインなしで、アカウントの管理やログの確認ができるようになります。';
+            if (!confirm(msg)) return;
+            try {
+              await api('accounts/' + a.id + '/admin', { method: 'POST', body: { admin: !a.is_admin } });
               await Promise.all([loadAccounts(), loadLogs(true)]);
             } catch (err) { setMsg($('accountsMsg'), err.message); }
           }),

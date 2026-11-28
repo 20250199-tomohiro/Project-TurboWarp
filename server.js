@@ -59,6 +59,7 @@ const initDb = async () => {
     last_login TIMESTAMPTZ
   )`);
   await q('CREATE UNIQUE INDEX IF NOT EXISTS accounts_username_lower ON accounts (lower(username))');
+  await q('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE');
   await q(`CREATE TABLE IF NOT EXISTS logs (
     id BIGSERIAL PRIMARY KEY,
     at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -184,7 +185,7 @@ const getCookie = (req, name) => {
 // =====================================================================
 let accountCache = new Map();
 const refreshAccounts = async () => {
-  const { rows } = await q('SELECT id, username, enabled, ver FROM accounts');
+  const { rows } = await q('SELECT id, username, enabled, ver, is_admin FROM accounts');
   accountCache = new Map(rows.map((r) => [r.id, r]));
 };
 const getLoggedInUser = (req) => {
@@ -334,6 +335,7 @@ app.post('/login', express.urlencoded({ extended: false, limit: '4kb' }), async 
       'INSERT INTO accounts (username, pass_hash) VALUES ($1, $2) ON CONFLICT (lower(username)) DO NOTHING',
       [ADMIN_USER, await hashPassword(crypto.randomBytes(24).toString('hex'))]
     );
+    await q('UPDATE accounts SET is_admin = TRUE WHERE lower(username) = lower($1) AND NOT is_admin', [ADMIN_USER]);
     await refreshAccounts();
   }
 
@@ -417,9 +419,14 @@ admin.post('/api/login', async (req, res) => {
   return res.json({ ok: true });
 });
 
+// 管理者権限を付与されたアカウントでログイン中なら、管理画面のログインなしで操作できる
+const isAdminAccountRequest = (req) => {
+  const acc = getLoggedInUser(req);
+  return !!(acc && acc.is_admin);
+};
 const requireAdmin = (req, res, next) => {
   res.set('Cache-Control', 'no-store');
-  if (!verifyAdminToken(getCookie(req, ADMIN_COOKIE))) {
+  if (!verifyAdminToken(getCookie(req, ADMIN_COOKIE)) && !isAdminAccountRequest(req)) {
     return res.status(401).json({ error: 'unauthorized', message: 'ログインしてください' });
   }
   // 画面以外(他サイトのフォームなど)からの変更操作を拒否する
@@ -444,7 +451,7 @@ const parseId = (v) => {
 };
 
 admin.get('/api/accounts', async (req, res) => {
-  const { rows } = await q('SELECT id, username, enabled, created_at, last_login FROM accounts ORDER BY id');
+  const { rows } = await q('SELECT id, username, enabled, is_admin, created_at, last_login FROM accounts ORDER BY id');
   res.json(rows);
 });
 
@@ -482,6 +489,22 @@ admin.post('/api/accounts/:id/enabled', async (req, res) => {
   if (!rows[0]) return res.status(404).json({ error: 'not_found', message: 'アカウントが見つかりません' });
   await refreshAccounts();
   await logEvent(rows[0].username, enabled ? 'account_enabled' : 'account_disabled', req, '管理者による操作');
+  return res.json({ ok: true });
+});
+
+// 管理者権限の付与・解除は、管理者のユーザー名・パスワードで入った人(管理画面のログイン)だけができる
+// (権限を付けられたアカウントが、さらに他の人へ権限を広げられないようにするため)
+admin.post('/api/accounts/:id/admin', async (req, res) => {
+  if (!verifyAdminToken(getCookie(req, ADMIN_COOKIE))) {
+    return res.status(403).json({ error: 'forbidden', message: '管理者権限の付与・解除は、管理者のユーザー名とパスワードで管理画面にログインしたときだけできます' });
+  }
+  const id = parseId(req.params.id);
+  const isAdmin = req.body ? req.body.admin : undefined;
+  if (!id || typeof isAdmin !== 'boolean') return res.status(400).json({ error: 'bad_request', message: '指定が正しくありません' });
+  const { rows } = await q('UPDATE accounts SET is_admin = $2::boolean WHERE id = $1 RETURNING username', [id, isAdmin]);
+  if (!rows[0]) return res.status(404).json({ error: 'not_found', message: 'アカウントが見つかりません' });
+  await refreshAccounts();
+  await logEvent(rows[0].username, isAdmin ? 'admin_granted' : 'admin_revoked', req, '管理者による操作');
   return res.json({ ok: true });
 });
 
