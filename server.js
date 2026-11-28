@@ -521,6 +521,104 @@ admin.post('/api/accounts/:id/password', async (req, res) => {
   return res.json({ ok: true });
 });
 
+// ---- アカウントのデータ移行(作品・フレンド・メッセージ・共同制作ルームを、別のアカウントへ移す) ----
+const migrateAccountData = async (client, from, to, opts) => {
+  const counts = { projects: 0, friends: 0, messages: 0, rooms: 0, memberships: 0 };
+  const pairOf = (a, b) => [Math.min(a, b), Math.max(a, b)];
+  if (opts.projects) {
+    const r = await client.query('UPDATE projects SET account_id = $2 WHERE account_id = $1', [from, to]);
+    counts.projects = r.rowCount;
+  }
+  if (opts.social) {
+    // フレンド: 移行先がすでにフレンドの相手や、移行先自身との関係は重複するので移さない
+    const fr = await client.query(
+      'SELECT CASE WHEN account_low = $1 THEN account_high ELSE account_low END AS other FROM friendships WHERE account_low = $1 OR account_high = $1',
+      [from]
+    );
+    for (const { other } of fr.rows) {
+      if (other === to) continue;
+      const [low, high] = pairOf(to, other);
+      const ins = await client.query(
+        'INSERT INTO friendships (account_low, account_high) VALUES ($1, $2) ON CONFLICT DO NOTHING', [low, high]
+      );
+      counts.friends += ins.rowCount;
+    }
+    await client.query('DELETE FROM friendships WHERE account_low = $1 OR account_high = $1', [from]);
+    // フレンド申請: 移行元と移行先の間のものは消し、そのほかは移行先へ(重複は捨てる)
+    await client.query('DELETE FROM friend_requests WHERE (from_id = $1 AND to_id = $2) OR (from_id = $2 AND to_id = $1)', [from, to]);
+    const reqs = await client.query('SELECT id, from_id, to_id FROM friend_requests WHERE from_id = $1 OR to_id = $1', [from]);
+    for (const r of reqs.rows) {
+      const nf = r.from_id === from ? to : r.from_id;
+      const nt = r.to_id === from ? to : r.to_id;
+      await client.query(
+        `UPDATE friend_requests SET from_id = $2, to_id = $3 WHERE id = $1
+         AND NOT EXISTS (SELECT 1 FROM friend_requests x WHERE x.from_id = $2 AND x.to_id = $3)`,
+        [r.id, nf, nt]
+      );
+    }
+    await client.query('DELETE FROM friend_requests WHERE from_id = $1 OR to_id = $1', [from]);
+    // メッセージ
+    await client.query('DELETE FROM direct_messages WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)', [from, to]);
+    const m1 = await client.query('UPDATE direct_messages SET sender_id = $2 WHERE sender_id = $1', [from, to]);
+    const m2 = await client.query('UPDATE direct_messages SET recipient_id = $2 WHERE recipient_id = $1', [from, to]);
+    counts.messages = m1.rowCount + m2.rowCount;
+    // フレンドコードは、移行先のものをそのまま使う(移行元のものは消す)
+    await client.query('DELETE FROM friend_codes WHERE account_id = $1', [from]);
+    // 共同制作: 作成したルームは移行先のものにする
+    const rooms = await client.query('UPDATE collab_rooms SET owner_id = $2 WHERE owner_id = $1', [from, to]);
+    counts.rooms = rooms.rowCount;
+    // 参加者としての記録を移す(すでに参加している、または自分のルームの場合は捨てる)
+    const mem = await client.query(
+      `UPDATE collab_room_members m SET account_id = $2 WHERE m.account_id = $1
+       AND NOT EXISTS (SELECT 1 FROM collab_room_members x WHERE x.room_id = m.room_id AND x.account_id = $2)`,
+      [from, to]
+    );
+    counts.memberships = mem.rowCount;
+    await client.query('DELETE FROM collab_room_members WHERE account_id = $1', [from]);
+    // 移した作成者を、ルームの参加者にもしておく
+    await client.query(
+      `INSERT INTO collab_room_members (room_id, account_id) SELECT id, owner_id FROM collab_rooms WHERE owner_id = $1
+       ON CONFLICT DO NOTHING`, [to]
+    );
+    await client.query('UPDATE collab_todos SET created_by = $2 WHERE created_by = $1', [from, to]);
+    await client.query('UPDATE collab_events SET account_id = $2 WHERE account_id = $1', [from, to]);
+    await client.query('DELETE FROM collab_presence WHERE account_id = $1', [from]);
+  }
+  return counts;
+};
+
+admin.post('/api/accounts/migrate', async (req, res) => {
+  const body = req.body || {};
+  const from = parseId(body.fromId);
+  const to = parseId(body.toId);
+  const opts = { projects: body.projects === true, social: body.social === true };
+  const deleteSource = body.deleteSource === true;
+  if (!from || !to || from === to) return res.status(400).json({ error: 'bad_request', message: '移行元と移行先には、別々のアカウントを指定してください' });
+  if (!opts.projects && !opts.social) return res.status(400).json({ error: 'bad_request', message: '移行するデータを選んでください' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const accs = await client.query('SELECT id, username FROM accounts WHERE id IN ($1, $2) FOR UPDATE', [from, to]);
+    const src = accs.rows.find((r) => r.id === from);
+    const dst = accs.rows.find((r) => r.id === to);
+    if (!src || !dst) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'not_found', message: 'アカウントが見つかりません' });
+    }
+    const counts = await migrateAccountData(client, from, to, opts);
+    if (deleteSource) await client.query('DELETE FROM accounts WHERE id = $1', [from]);
+    await client.query('COMMIT');
+    await refreshAccounts();
+    await logEvent(src.username, 'account_migrated', req, '→ ' + dst.username + ' に移行(作品' + counts.projects + '件、フレンド' + counts.friends + '人、ルーム' + counts.rooms + '件)' + (deleteSource ? '、移行元を削除' : ''));
+    return res.json({ ok: true, from: src.username, to: dst.username, ...counts, deleted: deleteSource });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
+});
+
 admin.delete('/api/accounts/:id', async (req, res) => {
   const id = parseId(req.params.id);
   if (!id) return res.status(400).json({ error: 'bad_request', message: '指定が正しくありません' });

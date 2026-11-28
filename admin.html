@@ -100,6 +100,21 @@
     </section>
 
     <section>
+      <h2>データを別のアカウントへ移行</h2>
+      <p class="msg" style="color:inherit">作品・フレンド・メッセージ・共同制作ルームを、あるアカウントから別のアカウントへ移します。移行したデータは、移行元からはなくなります。</p>
+      <form id="migrateForm" class="row">
+        <select id="migFrom" aria-label="移行元"></select>
+        <span>→</span>
+        <select id="migTo" aria-label="移行先"></select>
+        <label><input type="checkbox" id="migProjects" checked> 私の作品</label>
+        <label><input type="checkbox" id="migSocial" checked> フレンド・メッセージ・ルーム</label>
+        <label><input type="checkbox" id="migDelete"> 移行元のアカウントを削除</label>
+        <button class="primary" type="submit" id="migBtn">移行する</button>
+      </form>
+      <p class="msg" id="migMsg"></p>
+    </section>
+
+    <section>
       <h2>利用履歴</h2>
       <form id="filterForm" class="row filters">
         <input id="filterUser" type="text" placeholder="アカウント名で絞り込み" maxlength="64" autocapitalize="off" spellcheck="false">
@@ -154,6 +169,7 @@
     admin_login: ['管理者ログイン', 'ev-warn'],
     admin_login_failed: ['管理者ログイン失敗', 'ev-bad'],
     admin_logout: ['管理者ログアウト', 'ev-warn'],
+    account_migrated: ['データ移行', 'ev-warn'],
     admin_granted: ['管理者権限の付与', 'ev-warn'],
     admin_revoked: ['管理者権限の解除', 'ev-warn']
   };
@@ -230,6 +246,17 @@
         body.append(tr);
         return;
       }
+      for (const sel of [$('migFrom'), $('migTo')]) {
+        const keep = sel.value;
+        sel.replaceChildren();
+        for (const a of rows) {
+          const o = document.createElement('option');
+          o.value = String(a.id);
+          o.textContent = a.username;
+          sel.append(o);
+        }
+        if (keep) sel.value = keep;
+      }
       for (const a of rows) {
         const tr = document.createElement('tr');
         tr.append(cell(a.username));
@@ -293,6 +320,29 @@
       setMsg($('accountsMsg'), err.message);
     }
   };
+
+  $('migrateForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const from = $('migFrom').selectedOptions[0];
+    const to = $('migTo').selectedOptions[0];
+    if (!from || !to || from.value === to.value) { setMsg($('migMsg'), '移行元と移行先には、別々のアカウントを選んでください'); return; }
+    const del = $('migDelete').checked;
+    if (!confirm('「' + from.textContent + '」のデータを「' + to.textContent + '」へ移します。' + (del ? '移行元のアカウントは削除されます。' : '') + 'この操作は元に戻せません。よろしいですか?')) return;
+    $('migBtn').disabled = true;
+    setMsg($('migMsg'), '');
+    try {
+      const r = await api('accounts/migrate', { method: 'POST', body: {
+        fromId: Number(from.value), toId: Number(to.value),
+        projects: $('migProjects').checked, social: $('migSocial').checked, deleteSource: del
+      } });
+      setMsg($('migMsg'), '移行しました(作品' + r.projects + '件、フレンド' + r.friends + '人、メッセージ' + r.messages + '件、ルーム' + r.rooms + '件)', true);
+      await Promise.all([loadAccounts(), loadLogs(true)]);
+    } catch (err) {
+      setMsg($('migMsg'), err.message);
+    } finally {
+      $('migBtn').disabled = false;
+    }
+  });
 
   $('createForm').addEventListener('submit', async (e) => {
     e.preventDefault();
