@@ -326,12 +326,23 @@ app.post('/login', express.urlencoded({ extended: false, limit: '4kb' }), async 
   const password = typeof body.password === 'string' ? body.password.slice(0, 256) : '';
   if (!username || !password) return reply(401, false, BAD_LOGIN);
 
+  // 管理者のユーザー名・パスワードでも、そのままログインできる(管理者用のアカウントを自動で作る)
+  const isAdminLogin = safeEqual(username, ADMIN_USER) && safeEqual(password, ADMIN_PASSWORD);
+  if (isAdminLogin) {
+    // 通常のパスワードでは入れない(使えない値を設定する)。管理者のユーザー名・パスワードだけで入れる
+    await q(
+      'INSERT INTO accounts (username, pass_hash) VALUES ($1, $2) ON CONFLICT (lower(username)) DO NOTHING',
+      [ADMIN_USER, await hashPassword(crypto.randomBytes(24).toString('hex'))]
+    );
+    await refreshAccounts();
+  }
+
   const { rows } = await q(
     'SELECT id, username, pass_hash, enabled, ver FROM accounts WHERE lower(username) = lower($1)',
-    [username]
+    [isAdminLogin ? ADMIN_USER : username]
   );
   const acc = rows[0];
-  const passwordOk = await verifyPassword(password, acc ? acc.pass_hash : DUMMY_HASH);
+  const passwordOk = isAdminLogin || await verifyPassword(password, acc ? acc.pass_hash : DUMMY_HASH);
 
   if (!acc || !passwordOk) {
     userLimiter.fail(ip);
