@@ -83,6 +83,7 @@ const initDb = async () => {
     PRIMARY KEY(account_low,account_high), CHECK(account_low < account_high)
   )`);
   await q('CREATE UNIQUE INDEX IF NOT EXISTS accounts_username_lower ON accounts (lower(username))');
+  await q('ALTER TABLE accounts ADD COLUMN IF NOT EXISTS is_admin BOOLEAN NOT NULL DEFAULT FALSE');
   await q(`CREATE TABLE IF NOT EXISTS logs (
     id BIGSERIAL PRIMARY KEY,
     at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -207,7 +208,7 @@ const getCookie = (req, name) => {
 // =====================================================================
 let accountCache = new Map();
 const refreshAccounts = async () => {
-  const { rows } = await q('SELECT id, username, enabled, ver FROM accounts');
+  const { rows } = await q('SELECT id, username, enabled, ver, is_admin FROM accounts');
   accountCache = new Map(rows.map((r) => [r.id, r]));
 };
 const getLoggedInUser = (req) => {
@@ -442,12 +443,24 @@ app.post('/login', express.urlencoded({ extended: false, limit: '4kb' }), async 
   const password = typeof body.password === 'string' ? body.password.slice(0, 256) : '';
   if (!username || !password) return reply(401, false, BAD_LOGIN);
 
+  // 管理者のユーザー名・パスワードでも、そのままログインできる(管理者用のアカウントを自動で作る)
+  const isAdminLogin = safeEqual(username, ADMIN_USER) && safeEqual(password, ADMIN_PASSWORD);
+  if (isAdminLogin) {
+    // 通常のパスワードでは入れない(使えない値を設定する)。管理者のユーザー名・パスワードだけで入れる
+    await q(
+      'INSERT INTO accounts (username, pass_hash) VALUES ($1, $2) ON CONFLICT (lower(username)) DO NOTHING',
+      [ADMIN_USER, await hashPassword(crypto.randomBytes(24).toString('hex'))]
+    );
+    await q('UPDATE accounts SET is_admin = TRUE WHERE lower(username) = lower($1) AND NOT is_admin', [ADMIN_USER]);
+    await refreshAccounts();
+  }
+
   const { rows } = await q(
     'SELECT id, username, pass_hash, enabled, ver FROM accounts WHERE lower(username) = lower($1)',
-    [username]
+    [isAdminLogin ? ADMIN_USER : username]
   );
   const acc = rows[0];
-  const passwordOk = await verifyPassword(password, acc ? acc.pass_hash : DUMMY_HASH);
+  const passwordOk = isAdminLogin || await verifyPassword(password, acc ? acc.pass_hash : DUMMY_HASH);
 
   if (!acc || !passwordOk) {
     userLimiter.fail(ip);
@@ -522,9 +535,14 @@ admin.post('/api/login', async (req, res) => {
   return res.json({ ok: true });
 });
 
+// 管理者権限を付与されたアカウントでログイン中なら、管理画面のログインなしで操作できる
+const isAdminAccountRequest = (req) => {
+  const acc = getLoggedInUser(req);
+  return !!(acc && acc.is_admin);
+};
 const requireAdmin = (req, res, next) => {
   res.set('Cache-Control', 'no-store');
-  if (!verifyAdminToken(getCookie(req, ADMIN_COOKIE))) {
+  if (!verifyAdminToken(getCookie(req, ADMIN_COOKIE)) && !isAdminAccountRequest(req)) {
     return res.status(401).json({ error: 'unauthorized', message: 'ログインしてください' });
   }
   // 画面以外(他サイトのフォームなど)からの変更操作を拒否する
@@ -549,7 +567,7 @@ const parseId = (v) => {
 };
 
 admin.get('/api/accounts', async (req, res) => {
-  const { rows } = await q('SELECT id, username, enabled, created_at, last_login FROM accounts ORDER BY id');
+  const { rows } = await q('SELECT id, username, enabled, is_admin, created_at, last_login FROM accounts ORDER BY id');
   res.json(rows);
 });
 
@@ -590,6 +608,22 @@ admin.post('/api/accounts/:id/enabled', async (req, res) => {
   return res.json({ ok: true });
 });
 
+// 管理者権限の付与・解除は、管理者のユーザー名・パスワードで入った人(管理画面のログイン)だけができる
+// (権限を付けられたアカウントが、さらに他の人へ権限を広げられないようにするため)
+admin.post('/api/accounts/:id/admin', async (req, res) => {
+  if (!verifyAdminToken(getCookie(req, ADMIN_COOKIE))) {
+    return res.status(403).json({ error: 'forbidden', message: '管理者権限の付与・解除は、管理者のユーザー名とパスワードで管理画面にログインしたときだけできます' });
+  }
+  const id = parseId(req.params.id);
+  const isAdmin = req.body ? req.body.admin : undefined;
+  if (!id || typeof isAdmin !== 'boolean') return res.status(400).json({ error: 'bad_request', message: '指定が正しくありません' });
+  const { rows } = await q('UPDATE accounts SET is_admin = $2::boolean WHERE id = $1 RETURNING username', [id, isAdmin]);
+  if (!rows[0]) return res.status(404).json({ error: 'not_found', message: 'アカウントが見つかりません' });
+  await refreshAccounts();
+  await logEvent(rows[0].username, isAdmin ? 'admin_granted' : 'admin_revoked', req, '管理者による操作');
+  return res.json({ ok: true });
+});
+
 admin.post('/api/accounts/:id/password', async (req, res) => {
   const id = parseId(req.params.id);
   const password = req.body ? req.body.password : undefined;
@@ -601,6 +635,105 @@ admin.post('/api/accounts/:id/password', async (req, res) => {
   await refreshAccounts();
   await logEvent(rows[0].username, 'password_reset', req, '管理者による操作');
   return res.json({ ok: true });
+});
+
+// ---- アカウントのデータ移行(作品・フレンド・メッセージ・共同制作ルームを、別のアカウントへ移す) ----
+const migrateAccountData = async (client, from, to, opts) => {
+  const counts = { projects: 0, friends: 0, messages: 0, rooms: 0, memberships: 0 };
+  const pairOf = (a, b) => [Math.min(a, b), Math.max(a, b)];
+  if (opts.projects) {
+    const r = await client.query('UPDATE projects SET account_id = $2 WHERE account_id = $1', [from, to]);
+    counts.projects = r.rowCount;
+  }
+  const socialReady = (await client.query("SELECT to_regclass('friend_requests') IS NOT NULL AND to_regclass('direct_messages') IS NOT NULL AND to_regclass('friend_codes') IS NOT NULL AND to_regclass('collab_rooms') IS NOT NULL AND to_regclass('collab_room_members') IS NOT NULL AND to_regclass('collab_todos') IS NOT NULL AND to_regclass('collab_events') IS NOT NULL AND to_regclass('collab_presence') IS NOT NULL AS ok")).rows[0].ok;
+  if (opts.social && socialReady) {
+    // フレンド: 移行先がすでにフレンドの相手や、移行先自身との関係は重複するので移さない
+    const fr = await client.query(
+      'SELECT CASE WHEN account_low = $1 THEN account_high ELSE account_low END AS other FROM friendships WHERE account_low = $1 OR account_high = $1',
+      [from]
+    );
+    for (const { other } of fr.rows) {
+      if (other === to) continue;
+      const [low, high] = pairOf(to, other);
+      const ins = await client.query(
+        'INSERT INTO friendships (account_low, account_high) VALUES ($1, $2) ON CONFLICT DO NOTHING', [low, high]
+      );
+      counts.friends += ins.rowCount;
+    }
+    await client.query('DELETE FROM friendships WHERE account_low = $1 OR account_high = $1', [from]);
+    // フレンド申請: 移行元と移行先の間のものは消し、そのほかは移行先へ(重複は捨てる)
+    await client.query('DELETE FROM friend_requests WHERE (from_id = $1 AND to_id = $2) OR (from_id = $2 AND to_id = $1)', [from, to]);
+    const reqs = await client.query('SELECT id, from_id, to_id FROM friend_requests WHERE from_id = $1 OR to_id = $1', [from]);
+    for (const r of reqs.rows) {
+      const nf = r.from_id === from ? to : r.from_id;
+      const nt = r.to_id === from ? to : r.to_id;
+      await client.query(
+        `UPDATE friend_requests SET from_id = $2, to_id = $3 WHERE id = $1
+         AND NOT EXISTS (SELECT 1 FROM friend_requests x WHERE x.from_id = $2 AND x.to_id = $3)`,
+        [r.id, nf, nt]
+      );
+    }
+    await client.query('DELETE FROM friend_requests WHERE from_id = $1 OR to_id = $1', [from]);
+    // メッセージ
+    await client.query('DELETE FROM direct_messages WHERE (sender_id = $1 AND recipient_id = $2) OR (sender_id = $2 AND recipient_id = $1)', [from, to]);
+    const m1 = await client.query('UPDATE direct_messages SET sender_id = $2 WHERE sender_id = $1', [from, to]);
+    const m2 = await client.query('UPDATE direct_messages SET recipient_id = $2 WHERE recipient_id = $1', [from, to]);
+    counts.messages = m1.rowCount + m2.rowCount;
+    // フレンドコードは、移行先のものをそのまま使う(移行元のものは消す)
+    await client.query('DELETE FROM friend_codes WHERE account_id = $1', [from]);
+    // 共同制作: 作成したルームは移行先のものにする
+    const rooms = await client.query('UPDATE collab_rooms SET owner_id = $2 WHERE owner_id = $1', [from, to]);
+    counts.rooms = rooms.rowCount;
+    // 参加者としての記録を移す(すでに参加している、または自分のルームの場合は捨てる)
+    const mem = await client.query(
+      `UPDATE collab_room_members m SET account_id = $2 WHERE m.account_id = $1
+       AND NOT EXISTS (SELECT 1 FROM collab_room_members x WHERE x.room_id = m.room_id AND x.account_id = $2)`,
+      [from, to]
+    );
+    counts.memberships = mem.rowCount;
+    await client.query('DELETE FROM collab_room_members WHERE account_id = $1', [from]);
+    // 移した作成者を、ルームの参加者にもしておく
+    await client.query(
+      `INSERT INTO collab_room_members (room_id, account_id) SELECT id, owner_id FROM collab_rooms WHERE owner_id = $1
+       ON CONFLICT DO NOTHING`, [to]
+    );
+    await client.query('UPDATE collab_todos SET created_by = $2 WHERE created_by = $1', [from, to]);
+    await client.query('UPDATE collab_events SET account_id = $2 WHERE account_id = $1', [from, to]);
+    await client.query('DELETE FROM collab_presence WHERE account_id = $1', [from]);
+  }
+  return counts;
+};
+
+admin.post('/api/accounts/migrate', async (req, res) => {
+  const body = req.body || {};
+  const from = parseId(body.fromId);
+  const to = parseId(body.toId);
+  const opts = { projects: body.projects === true, social: body.social === true };
+  const deleteSource = body.deleteSource === true;
+  if (!from || !to || from === to) return res.status(400).json({ error: 'bad_request', message: '移行元と移行先には、別々のアカウントを指定してください' });
+  if (!opts.projects && !opts.social) return res.status(400).json({ error: 'bad_request', message: '移行するデータを選んでください' });
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const accs = await client.query('SELECT id, username FROM accounts WHERE id IN ($1, $2) FOR UPDATE', [from, to]);
+    const src = accs.rows.find((r) => r.id === from);
+    const dst = accs.rows.find((r) => r.id === to);
+    if (!src || !dst) {
+      await client.query('ROLLBACK');
+      return res.status(404).json({ error: 'not_found', message: 'アカウントが見つかりません' });
+    }
+    const counts = await migrateAccountData(client, from, to, opts);
+    if (deleteSource) await client.query('DELETE FROM accounts WHERE id = $1', [from]);
+    await client.query('COMMIT');
+    await refreshAccounts();
+    await logEvent(src.username, 'account_migrated', req, '→ ' + dst.username + ' に移行(作品' + counts.projects + '件、フレンド' + counts.friends + '人、ルーム' + counts.rooms + '件)' + (deleteSource ? '、移行元を削除' : ''));
+    return res.json({ ok: true, from: src.username, to: dst.username, ...counts, deleted: deleteSource });
+  } catch (err) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw err;
+  } finally {
+    client.release();
+  }
 });
 
 admin.delete('/api/accounts/:id', async (req, res) => {
@@ -706,6 +839,12 @@ app.get('/', (req, res) => {
   res.sendFile(path.join(__dirname, 'home.html'));
 });
 
+// ---- 稼働確認(スリープ防止用。ログイン不要で、中身はなにも返さない) ----
+app.get('/healthz', (req, res) => {
+  res.set('Cache-Control', 'no-store');
+  res.type('text/plain').send('ok');
+});
+
 // ---- ここから先は、ログインした利用者だけが見られる ----
 app.use((req, res, next) => {
   if (getLoggedInUser(req)) return next();
@@ -793,7 +932,7 @@ for (const [route, file] of [
 app.get('/me', (req, res) => {
   res.set('Cache-Control', 'no-store');
   const acc = getLoggedInUser(req);
-  res.json({ username: acc ? acc.username : '' });
+  res.json({ username: acc ? acc.username : '', id: acc ? acc.id : null });
 });
 
 // ---- 私の作品(アカウントごとの保存) ----
@@ -1256,6 +1395,14 @@ const start = async () => {
   setInterval(() => {
     cleanupLogs().catch((err) => console.error('古いログの削除に失敗しました:', err.message));
   }, 24 * 60 * 60 * 1000);
+
+  // 自分のサイトに定期的にアクセスして、スリープしにくくする(Render が設定する RENDER_EXTERNAL_URL か、SITE_URL を使う)
+  const selfUrl = (process.env.SITE_URL || process.env.RENDER_EXTERNAL_URL || '').replace(/\/+$/, '');
+  if (selfUrl && process.env.KEEP_ALIVE !== '0') {
+    const ping = () => fetch(selfUrl + '/healthz', { signal: AbortSignal.timeout(30000) })
+      .catch((err) => console.error('稼働確認のアクセスに失敗しました:', err.message));
+    setInterval(ping, 10 * 60 * 1000).unref();
+  }
 
   const port = process.env.PORT || 10000;
   app.listen(port, () => console.log('Started on port ' + port + ' (admin: /' + ADMIN_PATH + ')'));
